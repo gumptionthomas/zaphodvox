@@ -1,4 +1,3 @@
-
 The `zaphodvox` python package provides a command-line interface for encoding a text file into synthetic speech audio using either the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) or the [ElevenLabs Speech Synthesis API](https://elevenlabs.io/docs).
 
 It can be run from the command-line or imported as a python package for programmatic integration.
