@@ -2,7 +2,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from zaphodvox.elevenlabs.encoder import ElevenLabsEncoder
 from zaphodvox.elevenlabs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.voice import GoogleVoice
@@ -110,3 +109,14 @@ class TestElevenLabsEncoder():
         encoder = ElevenLabsEncoder()
         assert encoder.file_extension == 'mp3'
 
+    def test_t2s_wrong_voice(self, *args):
+        elevenlabs_encoder = ElevenLabsEncoder()
+        text = "Hello, world!"
+        voice = GoogleVoice(
+            voice_id='A', language='en', region='US', type='Wavenet'
+        )
+        filepath = Path('/path/to/output.wav')
+
+        with pytest.raises(ValueError) as ve:
+            elevenlabs_encoder.t2s(text, voice, filepath)
+        assert str(ve.value) == 'Not an ElevenLabsVoice.'

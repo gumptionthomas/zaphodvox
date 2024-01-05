@@ -1,5 +1,6 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
+from argparse import Namespace
 from google.cloud.texttospeech import AudioConfig, VoiceSelectionParams
 
 from zaphodvox.voice import Voice
@@ -24,7 +25,7 @@ class GoogleVoice(Voice):
     """The volume gain in decibels."""
     sample_rate_hertz: Optional[int] = None
     """The sample rate in hertz."""
-    effects_profile_id: Optional[List[str]] = None
+    effects_profile_id: Optional[list[str]] = None
 
     @property
     def voice_selection_params(self) -> VoiceSelectionParams:
@@ -39,7 +40,7 @@ class GoogleVoice(Voice):
             name=f'{language_code}-{self.type}-{self.voice_id}'
         )
 
-    def get_audio_config(self, audio_encoding) -> AudioConfig:
+    def get_audio_config(self, audio_encoding: int) -> AudioConfig:
         """Retrieves the audio configuration for the current instance.
 
         Args:
@@ -48,7 +49,7 @@ class GoogleVoice(Voice):
         Returns:
             The `AudioConfig` object.
         """
-        audio_config_kwargs: Dict[str, Any] = {}
+        audio_config_kwargs: dict[str, Any] = {}
         audio_config_kwargs['audio_encoding'] = audio_encoding
         if (speaking_rate := self.speaking_rate) is not None:
             audio_config_kwargs['speaking_rate'] = speaking_rate
@@ -61,3 +62,32 @@ class GoogleVoice(Voice):
         if (effects_profile_id := self.effects_profile_id) is not None:
             audio_config_kwargs['effects_profile_id'] = effects_profile_id
         return AudioConfig(**audio_config_kwargs)
+
+    @classmethod
+    def from_args(cls, args: Namespace) -> Optional['GoogleVoice']:
+        """Create an instance of `GoogleVoice` based on the provided arguments.
+
+        Args:
+            cls: The class object of the `GoogleVoice`.
+            args: The command-line arguments.
+
+        Returns:
+            An `GoogleVoice` instance, `None` if insufficient arguments.
+        """
+        voice = None
+        if None not in [
+            args.voice_id, args.voice_language,
+            args.voice_region, args.voice_type
+        ]:
+            voice = cls(
+                voice_id=args.voice_id,
+                language=args.voice_language,
+                region=args.voice_region,
+                type=args.voice_type,
+                speaking_rate=args.voice_speaking_rate,
+                pitch=args.voice_pitch,
+                volume_gain_db=args.voice_volume_gain_db,
+                sample_rate_hertz=args.voice_sample_rate_hertz,
+                effects_profile_id=args.voice_effects_profile_id
+            )
+        return voice

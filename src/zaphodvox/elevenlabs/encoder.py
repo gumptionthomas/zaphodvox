@@ -1,7 +1,6 @@
 from argparse import Namespace
 from pathlib import Path
-from typing import Literal, Optional, Tuple, cast, get_args
-
+from typing import Literal, Optional
 
 from elevenlabs import History, generate, save, set_api_key
 from elevenlabs import Voice as ELVoice
@@ -11,7 +10,6 @@ from zaphodvox.elevenlabs.voice import ElevenLabsVoice
 from zaphodvox.encoder import Encoder
 from zaphodvox.progress import ProgressBar
 from zaphodvox.voice import Voice
-
 
 AudioFormat = Literal[
     'mp3_44100_64',
@@ -45,15 +43,24 @@ class ElevenLabsEncoder(Encoder):
     convert text to speech and save it as an audio file.
     """
 
-    def __init__(self,audio_format: Optional[AudioFormat] = None) -> None:
+    def __init__(self, audio_format: Optional[AudioFormat] = None) -> None:
         """Initialize the `ElevenLabsEncoder` object.
 
         Args:
             audio_format: The audio format to be used.
                 Defaults to `mp3_44100_128`.
         """
-        self.audio_format = audio_format or 'mp3_44100_128'
+        self._audio_format = audio_format or 'mp3_44100_128'
         """The audio format to be used."""
+
+    @property
+    def audio_format(self) -> str:
+        """The audio format to be used.
+
+        Returns:
+            The audio format.
+        """
+        return self._audio_format
 
     @property
     def file_extension(self) -> str:
@@ -62,11 +69,11 @@ class ElevenLabsEncoder(Encoder):
         Raises:
             ValueError: If the specified audio format is not supported.
         """
-        file_ext = FILE_EXTENSIONS.get(self.audio_format, None)
+        file_ext = FILE_EXTENSIONS.get(self.audio_format)
         if not file_ext:
             raise ValueError(
                 f'Audio format "{self.audio_format}" is not supported by '
-                f'ElevenLabsEncoder. Use one of {get_args(AudioFormat)}.'
+                f'ElevenLabsEncoder. Use one of {FILE_EXTENSIONS.keys()}.'
             )
         return file_ext
 
@@ -79,7 +86,8 @@ class ElevenLabsEncoder(Encoder):
             voice: The `Voice` to use for the speech conversion.
             filepath: The `Path` of the generated audio file.
         """
-        voice = cast(ElevenLabsVoice, voice)
+        if not isinstance(voice, ElevenLabsVoice):
+            raise ValueError('Not an ElevenLabsVoice.')
         elevenlabs_voice = ELVoice(
             voice_id=voice.voice_id, settings=voice.voice_settings
         )
@@ -118,7 +126,7 @@ class ElevenLabsEncoder(Encoder):
     @classmethod
     def from_args(
         cls, args: Namespace
-    ) -> Tuple['ElevenLabsEncoder', Optional[ElevenLabsVoice]]:
+    ) -> tuple['ElevenLabsEncoder', Optional[ElevenLabsVoice]]:
         """Create an instance of `ElevenLabsEncoder` and an optional
         `ElevenLabsVoice` instance based on the provided arguments.
 
@@ -133,16 +141,5 @@ class ElevenLabsEncoder(Encoder):
         if args.api_key:
             set_api_key(args.api_key)
         encoder = cls(audio_format=args.elevenlabs_audio_format)
-        voice = None
-        if args.voice_id is not None:
-            voice_model = args.voice_model
-            model = 'eleven_' + voice_model if voice_model else None
-            voice = ElevenLabsVoice(
-                voice_id=args.voice_id,
-                model=model,
-                stability=args.voice_stability,
-                similarity_boost=args.voice_similarity_boost,
-                style=args.voice_style,
-                use_speaker_boost=args.voice_use_speaker_boost
-            )
+        voice = ElevenLabsVoice.from_args(args)
         return (encoder, voice)

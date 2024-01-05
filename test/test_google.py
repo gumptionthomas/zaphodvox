@@ -108,3 +108,13 @@ class TestGoogleEncoder():
                 audio_format='invalid_audio_format'
             )
             _ = encoder.file_extension
+
+    def test_t2s_wrong_voice(self, *args):
+        google_encoder = GoogleEncoder()
+        text = "Hello, world!"
+        voice = ElevenLabsVoice(voice_id='TxGEqnHWrfWFTfGW9XjX')
+        filepath = Path('/path/to/output.wav')
+
+        with pytest.raises(ValueError) as ve:
+            google_encoder.t2s(text, voice, filepath)
+        assert str(ve.value) == 'Not a GoogleVoice.'

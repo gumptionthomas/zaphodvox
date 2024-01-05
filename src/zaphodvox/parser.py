@@ -1,56 +1,9 @@
 from argparse import Action, ArgumentParser, BooleanOptionalAction, Namespace
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence, get_args
-
-from pydantic import BaseModel
+from typing import Any, Optional, Sequence, get_args
 
 from zaphodvox.elevenlabs.encoder import AudioFormat as ElevenLabsAudioFormat
-from zaphodvox.elevenlabs.encoder import ElevenLabsEncoder
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
-from zaphodvox.encoder import Encoder
 from zaphodvox.googlecloud.encoder import AudioFormat as GoogleAudioFormat
-from zaphodvox.googlecloud.encoder import GoogleEncoder
-from zaphodvox.googlecloud.voice import GoogleVoice
-from zaphodvox.voice import Voice
-
-
-class NamedVoicesConfiguration(BaseModel):
-    """A named voice configuration."""
-
-    google: Optional[GoogleVoice] = None
-    """A `GoogleVoice` configuration."""
-    elevenlabs: Optional[ElevenLabsVoice] = None
-    """An `ElevenLabsVoice` configuration."""
-
-
-class NamedVoices(BaseModel):
-    """A dictionary of named voice configurations."""
-
-    voices: Dict[str, NamedVoicesConfiguration]
-    """The named voice configurations."""
-
-
-def parse_voices(
-    encoder: Encoder, filepath: Path
-) -> Dict[str, Optional[Voice]]:
-    """Parses the named voices for the encoder from the given JSON file.
-
-    Args:
-        encoder: The `Encoder` instance.
-        filepath: The `Path` to the JSON file.
-
-    Returns:
-        The name/`Voice` pairs for the `encoder`.
-    """
-    voices: Dict[str, Optional[Voice]] = {}
-    with open(str(filepath), 'r') as f:
-        voices_json = f.read()
-    named_voices = NamedVoices.model_validate_json(voices_json)
-    if isinstance(encoder, GoogleEncoder):
-        voices = {k: v.google for k, v in named_voices.voices.items()}
-    if isinstance(encoder, ElevenLabsEncoder):
-        voices = {k: v.elevenlabs for k, v in named_voices.voices.items()}
-    return voices
 
 
 def parse_args(args: list) -> Namespace:
@@ -62,6 +15,7 @@ def parse_args(args: list) -> Namespace:
     Returns:
         The parsed command-line arguments.
     """
+
     class ScalarAction(Action):
         """Custom action class for handling scalar values.
 
@@ -69,11 +23,11 @@ def parse_args(args: list) -> Namespace:
         0.0 to 1.0. If the value is outside this range, it raises an error.
 
         Args:
-            parser (ArgumentParser): The argument parser object.
-            namespace (Namespace): The namespace object.
-            values (Optional[str | Sequence[Any]]): The value(s) provided for
+            parser: The argument parser object.
+            namespace: The namespace object.
+            values: The value(s) provided for
                 the action.
-            option_string (Optional[str]): The option string associated with
+            option_string: The option string associated with
                 the action.
 
         Raises:
@@ -84,28 +38,52 @@ def parse_args(args: list) -> Namespace:
             values: Optional[str | Sequence[Any]],
             option_string: Optional[str] = None
         ) -> None:
+            """Validates that the provided value is within the range of
+            0.0 to 1.0.
+
+            Args:
+                parser: The argument parser object.
+                namespace: The namespace object.
+                values The value(s) provided for the action.
+                option_string: The option string associated with the action.
+            """
             if values is not None and float(str(values)) < 0.0:
                 parser.error(f'Minimum value for {option_string} is 0.0')
             if values is not None and float(str(values)) > 1.0:
                 parser.error(f'Maximum value for {option_string} is 1.0')
             setattr(namespace, self.dest, values)
 
+    def list_of_ints(arg):
+        """Converts a comma-delimited string of integers to a
+        list of integers.
+
+        Args:
+            arg: The comma-delimited string of integers.
+        """
+        return list(map(int, arg.split(',')))
+
     parser = ArgumentParser(
-        description='Encode a text file to synthetic speech audio file(s)'
+        description=(
+            'Encode a text file or manifest json file into synthetic speech '
+            'audio file(s)'
+        )
     )
     parser.add_argument(
-        'textfile',
+        'inputfile',
         type=Path,
-        help='The textfile to encode (e.g. "gone_bananas.txt")'
+        help=(
+            'The text file or manifest to encode '
+            '(e.g. "gone_bananas.txt" or "gone_bananas-manifest.json")'
+        )
     )
     parser.add_argument(
         '--encoder',
         choices=['google', 'elevenlabs'],
-        default='google',
-        help='The encoder to use (default: google)'
+        default=None,
+        help='The encoder to use'
     )
     parser.add_argument(
-        '--voices',
+        '--voices-file',
         type=Path,
         default=None,
         help='A JSON file containing named voices'
@@ -120,8 +98,8 @@ def parse_args(args: list) -> Namespace:
         type=int,
         default=None,
         help=(
-            'The maximum number of characters per block '
-            '(default: one block per line)'
+            'The maximum number of characters per fragment '
+            '(default: one fragment per line)'
         )
     )
     parser.add_argument(
@@ -138,7 +116,7 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help=(
             'The basename of any output file(s) '
-            '(default: <basename of textfile> e.g. "gone_bananas")'
+            '(default: [basename of inputfile] e.g. "gone_bananas")'
         )
     )
     parser.add_argument(
@@ -151,7 +129,25 @@ def parse_args(args: list) -> Namespace:
         '--clean-out',
         type=Path,
         default=None,
-        help='The clean text output file (default: [basename]-clean.txt)'
+        help=(
+            'The clean text output file '
+            '(default: [parent directory of inputfile]/[basename]-clean.txt)'
+        )
+    )
+    parser.add_argument(
+        '--plan',
+        action='store_true',
+        default=False,
+        help='Generate an encoding plan manifest for the input text'
+    )
+    parser.add_argument(
+        '--plan-out',
+        type=Path,
+        default=None,
+        help=(
+            'The encoding plan manifest output file '
+            '(default: [parent directory of inputfile]/[basename]-plan.txt)'
+        )
     )
     parser.add_argument(
         '--encode',
@@ -160,16 +156,38 @@ def parse_args(args: list) -> Namespace:
         help='Encode the text to audio file(s)'
     )
     parser.add_argument(
+        '--encode-dir',
+        type=Path,
+        default=None,
+        help=(
+            'The working directory in which to save the encoded fragment '
+            'audio files before concatenation or copying '
+            '(default: temporary directory)'
+        )
+    )
+    parser.add_argument(
         '--copy',
         action='store_true',
         default=False,
-        help='Copy the encoded segment files to the working directory'
+        help=(
+            'Copy the encoded fragment audio files to another directory '
+            'when complete'
+        )
+    )
+    parser.add_argument(
+        '--copy-dir',
+        type=Path,
+        default=None,
+        help=(
+            'The directory to copy the encoded fragment audio files to '
+            '(default: current working directory)'
+        )
     )
     parser.add_argument(
         '--concat',
         action='store_true',
         default=False,
-        help='Concatenate the encoded segment files into one audio file'
+        help='Concatenate the encoded segment audio files into one audio file'
     )
     parser.add_argument(
         '--concat-out',
@@ -177,7 +195,7 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help=(
             'The concatenated audio output file '
-            '(default: [basename].[wav|ogg|mp3])'
+            '(default: [current working directory]/[basename].[wav|ogg|mp3])'
         )
     )
     parser.add_argument(
@@ -192,8 +210,18 @@ def parse_args(args: list) -> Namespace:
         type=Path,
         default=None,
         help=(
-            'The manifest output file '
-            '(default: [basename]-manifest.json)'
+            'The manifest output file (default: '
+            '[path of inputfile] if inputfile is a manifest, '
+            'otherwise [copy-dir]/[basename]-manifest.json)'
+        )
+    )
+    parser.add_argument(
+        '--manifest-indexes',
+        type=list_of_ints,
+        default=None,
+        help=(
+            'The comma-delimited list of manifest audio file indexes '
+            '(0-based) to encode (default: all indexes)'
         )
     )
     google_group = parser.add_argument_group(
@@ -269,9 +297,9 @@ def parse_args(args: list) -> Namespace:
     )
     eleven_group.add_argument(
         '--voice-model',
-        choices=['multilingual_v2', 'monolingual_v1'],
-        default='multilingual_v2',
-        help='The ElevenLabs model to use (default: multilingual_v2)'
+        choices=['eleven_multilingual_v2', 'eleven_monolingual_v1'],
+        default='eleven_multilingual_v2',
+        help='The ElevenLabs model to use (default: eleven_multilingual_v2)'
     )
     eleven_group.add_argument(
         '--voice-stability',
