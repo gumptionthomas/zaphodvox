@@ -1,13 +1,23 @@
 The `zaphodvox` python package provides a command-line interface for encoding a text file into synthetic speech audio using either the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) or the [ElevenLabs Speech Synthesis API](https://elevenlabs.io/docs).
 
-It can be run from the command-line or imported as a python package for programmatic integration.
-
 # Installation
 
 > "He was clearly a man of many qualities, even if they were mostly bad ones."
 
-```bash
+```console
 $ pip install zaphodvox
+...
+Successfully installed zaphodvox...
+
+$ zaphodvox --help
+usage: zaphodvox --blah --blah --blah --beware --blah whatever
+...
+$ zaphodvox test.txt
+Nothing to do... I'd give you advice, but you wouldn't listen. No one ever does.
+
+$ pip uninstall zaphodvox
+...
+Successfully uninstalled zaphodvox...
 ```
 
 # Authorization
@@ -32,7 +42,13 @@ You can set the `ELEVEN_API_KEY` environment variable to the API key copied from
 
 > "I refuse to answer that question on the grounds that I don't know the answer."
 
-An example text file (`gone-bananas.txt`):
+Detailed usage information can be printed by running:
+
+```bash
+$ zaphodvox --help
+```
+
+Some examples using this text file (`gone-bananas.txt`):
 
 ```text
 This is the first line of text.
@@ -45,7 +61,7 @@ between lines. Ideally, these parts of the sentence would be on the same line.
 $ zaphodvox --encoder=google --voice-id=A --encode gone-bananas.txt
 ```
 
-Running the above command will encode the text file using the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) with the `en-US-Wavenet-A` voice. This will result in the following audio files being created in the working directory (one file for each line of text):
+Running the above command will encode the text file using the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) with the `en-US-Wavenet-A` voice. This will result in the following fragment audio files being created in the working directory (one file for each line of text):
 
 ```console
 gone-bananas-00000.wav ["This is the first line..."]
@@ -54,15 +70,21 @@ gone-bananas-00002.wav ["This is the last line. And this is..."]
 gone-bananas-00003.wav ["between lines. Ideally, these..."]
 ```
 
-If you want the individual audio files combined into one, you can add the `--concat` argument:
+In addition to the audio files, a manifest JSON file (`gone-bananas-manifest.json`) will also be written to the working directory. This file contains information about the fragment audio files encoded, including the text, the relative file name, and the voice used. This manifest file can also be used as input to the command rather than a text file. See the [manifest documentation](#manifest) for more information.
+
+## Concatenation
+
+To combine the individual fragment audio files into one, add the `--concat` argument:
 
 ```bash
 $ zaphodvox --encoder=google --voice-id=A --encode --concat gone-bananas.txt
 ```
 
-Now only a single file, `gone-bananas.wav`, will be created in the working directory.
+Now only a single audio file, `gone-bananas.wav`, will be created in the working directory.
 
-Note that there isn't much silence between individual lines of a text file. To add a delay between lines, we simply need to add an extra newline between each line of text. The easiest way to do this is to use the `--clean` option:
+## Cleaning
+
+Note that there isn't much silence between individual lines of the text file. To add a delay between lines, simply add an extra newline between each line of text. The easiest way to do this is to use the `--clean` option:
 
 ```bash
 $ zaphodvox --clean gone-bananas.txt
@@ -78,7 +100,7 @@ This is the next line. By default, each line of text is sent to the API individu
 This is the last line. And this is a sentence that is split between lines. Ideally, these parts of the sentence would be on the same line.
 ```
 
-We can now encode this new file:
+Encode this new file:
 
 ```bash
 $ zaphodvox --encoder=google --voice-id=A --encode --concat gone-bananas-cleaned.txt
@@ -86,19 +108,21 @@ $ zaphodvox --encoder=google --voice-id=A --encode --concat gone-bananas-cleaned
 
 Notice that there's 500ms of silence (the default) generated for each empty newline and that the last sentence is no longer split between lines.
 
-We can skip a step and combine `--encode` and `--clean` into a single command:
+The `--clean` and `--encode` arguments can be combined in a single call:
 
 ```bash
 $ zaphodvox --encoder=google --voice-id=A --clean --encode --concat gone-bananas.txt
 ```
 
-The text file will be cleaned before being encoded and concatenated into `gone-bananas.wav`. The cleaned text file (i.e. `gone-bananas-cleaned.txt`) will still be created in the working directory so you can verify the actual text that was encoded.
+If the `--max-chars` argument is provided, the cleaning process will guarantee that every line is less than `max-chars` characters by splitting long lines at sentence boundaries.
+
+The text file will be cleaned before being encoded and concatenated into `gone-bananas.wav`. The cleaned text file (i.e. `gone-bananas-cleaned.txt`) will still be created in the working directory.
 
 # Voice Configurations
 
 > "I'm so great even I get tongue-tied talking to myself."
 
-Multiple voice configurations can be defined in a JSON file and loaded via the `--voices` argument.
+Multiple voice configurations can be defined in a JSON file and loaded via the `--voices-file` argument.
 
 An example voice configuration file (`voices.json`):
 
@@ -142,7 +166,7 @@ An example voice configuration file (`voices.json`):
 }
 ```
 
-If a `--voices` JSON file is used, inline `ZVOX: [name]` tags in the `textfile` can specify the voice(s) to be used.
+If a `--voices-file` JSON file is used, inline `ZVOX: [name]` tags in a text `inputfile` can specify the voice(s) to be used.
 
 A example multi-voice text file (`heart-of-gold.txt`):
 
@@ -165,10 +189,10 @@ If a line contains the "ZVOX" tag, it will not be synthesized to speech.
 ```
 
 ```bash
-$ zaphodvox --voices=voices.json --encoder=google --encode heart-of-gold.txt
+$ zaphodvox --voices-file=voices.json --encoder=google --encode heart-of-gold.txt
 ```
 
-The above command will result in the following audio files to be created in the working directory:
+The above command will result in the following fragment audio files to be created in the working directory:
 
 ```console
 heart-of-gold-00000.wav ["This text will be spoken by the..." using "Marvin" google voice]
@@ -227,3 +251,82 @@ Example:
     "use_speaker_boost": null
 }
 ```
+
+# Manifest
+
+> “If I ever meet myself, I'll hit myself so hard I won't know what's hit me.”
+
+A manifest JSON file is created during the encoding process and can be used as the inputfile instead of a text file. If a manifest file is used, the fragment audio files to be re-encoded can be specified with the `--manifest-indexes` argument.
+
+For example, consider this simple text file (`towel.txt`):
+
+```text
+Don't forget your towel.
+And always know where it is.
+```
+
+The file is encoded with this command:
+
+```bash
+$ zaphodvox --encoder=google --voice-id=A --encode --copy towel.txt
+```
+
+Three files will be created in the current working directory: the two fragment audio files (`towel-00000.wav` and `towel-00001.wav`) and the manifest file (`towel-manifest.json`).
+
+Here are the contents of `towel-manifest.json`:
+
+```json
+"fragments":
+[
+    {
+        "text": "Don't forget your towel.",
+        "filename": "towel-00000.wav",
+        "voice":
+        {
+            "voice_id": "A",
+            "language": "en",
+            "region": "US",
+            "type": "Wavenet"
+        },
+        "silence_duration": null,
+        "encoder": "google",
+        "audio_format": "linear16"
+    },
+    {
+        "text": "And always know where it is.",
+        "filename": "towel-00001.wav",
+        "voice":
+        {
+            "voice_id": "A",
+            "language": "en",
+            "region": "US",
+            "type": "Wavenet"
+        },
+        "silence_duration": null,
+        "encoder": "google",
+        "audio_format": "linear16"
+    }
+]
+```
+
+Note that the fragment `filename`s are relative to the manifest file's location.
+
+Changes can be made to fragment `text`, `filename`, or `voice` items and the modified manifest file can be used to re-encode only the changes by specifying which fragment indexes to encode.
+
+For example, if the second fragment's `text` field is modified to remove the initial "And", this command will re-encode only the second fragment audio file in place (i.e. `towel-00001.wav`):
+
+```bash
+$ zaphodvox --encoder=google --encode --manifest-indexes=1 towel-manifest.json
+```
+
+The `--concat` argument can also be added when using a manifest file as input. In this case, an attempt will be made to concatenate both the unmodified and newly encoded fragment audio files into one. If any of the files specified in the manifest is missing, the concatenation will fail.
+
+A manifest plan can be created from a text file using the `--plan` argument:
+
+```bash
+$ zaphodvox --encoder=google --voice-id=A --plan gone-bananas.txt
+```
+
+The above command will write the manifest plan to `gone-bananas-plan.json` without doing any encoding. It can be reviewed and edited before being used as input to the command with the `--encode` argument.
+
+By default, each line of the text file is encoded into its own audio fragment. If the `--max-chars` argument is provided when generating a plan manifest or encoding a text file, the planning process will attempt to combine multiple lines of text per audio fragment, up to `max-chars` characters. Larger fragments often encode with better results.

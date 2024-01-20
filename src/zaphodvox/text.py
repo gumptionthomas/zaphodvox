@@ -1,15 +1,16 @@
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 from unidecode import unidecode
 
+from zaphodvox.manifest import Fragment
 from zaphodvox.voice import Voice
 
 
 def match_voice(
     text: str,
-    voices: Optional[Dict[str, Optional[Voice]]] = None,
-) -> Tuple[bool, Optional[Voice]]:
+    voices: Optional[dict[str, Optional[Voice]]] = None,
+) -> tuple[Optional[str], Optional[Voice]]:
     """Matches the given text with a named voice and returns the corresponding
     `NamedVoice` object.
 
@@ -24,55 +25,61 @@ def match_voice(
     match = re.match(r'ZVOX:\s*([^\s]+)', text)
     if match:
         voice_name = match.group(1).strip()
-        named_voice = (voices or {}).get(voice_name, None)
-        return True, named_voice
-    return False, None
+        voice = (voices or {}).get(voice_name)
+        return voice_name, voice
+    return None, None
 
 
 def parse_text(
     text: str,
     voice: Optional[Voice] = None,
-    voices: Optional[Dict[str, Optional[Voice]]] = None,
+    voices: Optional[dict[str, Optional[Voice]]] = None,
     max_chars: Optional[int] = None
-) -> list[Tuple[str, Voice]]:
-        """Parse the text into blocks with associated voice.
+) -> list[Fragment]:
+        """Parse the text into fragments with associated voice.
 
         Args:
             text: The text to be parsed.
-            voice: The default `Voice` to be used for blocks without a
+            voice: The default `Voice` to be used for fragments without a
                 specified 'inline' `Voice`.
             voices: A dictionary of named voices.
-            max_chars: The maximum number of characters per block.
+            max_chars: The maximum number of characters per fragment.
 
         Returns:
-            A list of tuples containing the parsed text blocks
-                and their associated `Voice` objects.
+            A list of `Fragment` objects.
 
         Raises:
-            ValueError: If a `Voice` is not specified for a block.
+            ValueError: If a `Voice` is not specified for a fragment.
         """
         lines = [p for p in text.split('\n')]
-        blocks: List[Tuple[str, Voice]] = []
+        fragments: list[Fragment] = []
         line_voice = voice
+        line_voice_name = None
         for line in lines:
-            matched, matched_voice = match_voice(line, voices)
-            if matched:
+            matched_name, matched_voice = match_voice(line, voices)
+            if matched_name:
                 if matched_voice:
                     line_voice = matched_voice
+                    line_voice_name = matched_name
                 continue
-            if line_voice:
-                if max_chars and blocks:
-                    prev_text, prev_voice = blocks[-1]
-                    if (
-                        len(prev_text) + 1 + len(line) <= max_chars and
-                        line_voice == prev_voice
-                    ):
-                        blocks[-1] = (prev_text + '\n' + line, prev_voice)
+            if not line_voice:
+                raise ValueError('No voice specified for text fragment.')
+            if max_chars and fragments:
+                fragment = fragments[-1]
+                if len(fragment.text) + 1 + len(line) <= max_chars:
+                    if line_voice == fragment.voice:
+                        fragment.text += '\n' + line
                         continue
-                blocks.append((line, line_voice))
-            else:
-                raise ValueError('No voice specified for text block.')
-        return blocks
+                if fragment.text:
+                    fragment.text += '\n'
+                if fragment.text.endswith('\n\n'):
+                    fragments.append(Fragment(text=''))
+            fragments.append(Fragment(
+                text=line,
+                voice=line_voice if line else None,
+                voice_name=line_voice_name if line else None
+            ))
+        return fragments
 
 
 def end_of_paragraph(text: str) -> bool:

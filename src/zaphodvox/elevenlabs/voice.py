@@ -1,5 +1,6 @@
 from typing import Optional
 
+from argparse import Namespace
 from elevenlabs import VoiceSettings
 
 from zaphodvox.voice import Voice
@@ -38,3 +39,25 @@ class ElevenLabsVoice(Voice):
         if self.use_speaker_boost is not None:
             settings.use_speaker_boost = self.use_speaker_boost
         return settings
+
+    @classmethod
+    def from_args(cls, args: Namespace) -> Optional['ElevenLabsVoice']:
+        """Returns an `ElevenLabsVoice` instance from the given arguments.
+
+        Args:
+            args: The command-line arguments.
+
+        Returns:
+            An `ElevenLabsVoice` instance, `None` if insufficient arguments.
+        """
+        voice = None
+        if args.voice_id is not None:
+            voice = ElevenLabsVoice(
+                voice_id=args.voice_id,
+                model=args.voice_model,
+                stability=args.voice_stability,
+                similarity_boost=args.voice_similarity_boost,
+                style=args.voice_style,
+                use_speaker_boost=args.voice_use_speaker_boost
+            )
+        return voice

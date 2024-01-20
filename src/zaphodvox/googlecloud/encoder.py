@@ -1,6 +1,6 @@
 from argparse import Namespace
 from pathlib import Path
-from typing import Literal, Optional, Tuple, cast, get_args
+from typing import Literal, Optional
 
 from google.cloud.texttospeech import (
     AudioEncoding,
@@ -12,7 +12,6 @@ from tenacity import Retrying, stop_after_attempt
 from zaphodvox.encoder import Encoder
 from zaphodvox.googlecloud.voice import GoogleVoice
 from zaphodvox.voice import Voice
-
 
 AudioFormat = Literal[
     'linear16',
@@ -50,7 +49,7 @@ class GoogleEncoder(Encoder):
             audio_format: The audio format to be used.
                 Defaults to `linear16`.
         """
-        self.audio_format = audio_format or 'linear16'
+        self._audio_format = audio_format or 'linear16'
         """The audio format to be used."""
         self._client: TextToSpeechClient
         """The Google `TextToSpeechClient`."""
@@ -62,18 +61,27 @@ class GoogleEncoder(Encoder):
             self._client = TextToSpeechClient()
 
     @property
+    def audio_format(self) -> str:
+        """The audio format to be used.
+
+        Returns:
+            The audio format.
+        """
+        return self._audio_format
+
+    @property
     def file_extension(self) -> str:
         """The file extension for the output audio files.
 
         Raises:
             ValueError: If the specified audio format is not supported.
         """
-        audio_info = AUDIO_INFO.get(self.audio_format, None)
+        audio_info = AUDIO_INFO.get(self.audio_format)
         file_ext = audio_info[0] if audio_info else None
         if not file_ext:
             raise ValueError(
                 f'Audio format "{self.audio_format}" is not supported by '
-                f'GoogleEncoder. Use one of {get_args(AudioFormat)}.'
+                f'GoogleEncoder. Use one of {AUDIO_INFO.keys()}.'
             )
         return file_ext
 
@@ -84,7 +92,7 @@ class GoogleEncoder(Encoder):
         Raises:
             ValueError: If the specified audio format is not supported.
         """
-        audio_info = AUDIO_INFO.get(self.audio_format, None)
+        audio_info = AUDIO_INFO.get(self.audio_format)
         encoding = audio_info[1] if audio_info else None
         if not encoding:
             raise ValueError(
@@ -102,7 +110,8 @@ class GoogleEncoder(Encoder):
             voice: The `Voice` to use for the speech synthesis.
             filepath: The `Path` of the generated audio file.
         """
-        voice = cast(GoogleVoice, voice)
+        if not isinstance(voice, GoogleVoice):
+            raise ValueError('Not a GoogleVoice.')
         for attempt in Retrying(reraise=True, stop=stop_after_attempt(5)):
             with attempt:
                 response = self._client.synthesize_speech(
@@ -120,7 +129,7 @@ class GoogleEncoder(Encoder):
     @classmethod
     def from_args(
         cls, args: Namespace
-    ) -> Tuple['GoogleEncoder', Optional[GoogleVoice]]:
+    ) -> tuple['GoogleEncoder', Optional[GoogleVoice]]:
         """Create an instance of the `GoogleEncoder` class and an optional
         `GoogleVoice` instance based on the provided arguments.
 
@@ -136,20 +145,5 @@ class GoogleEncoder(Encoder):
             service_account_filepath=args.service_account,
             audio_format=args.google_audio_format
         )
-        voice = None
-        if None not in [
-            args.voice_id, args.voice_language,
-            args.voice_region, args.voice_type
-        ]:
-            voice = GoogleVoice(
-                voice_id=args.voice_id,
-                language=args.voice_language,
-                region=args.voice_region,
-                type=args.voice_type,
-                speaking_rate=args.voice_speaking_rate,
-                pitch=args.voice_pitch,
-                volume_gain_db=args.voice_volume_gain_db,
-                sample_rate_hertz=args.voice_sample_rate_hertz,
-                effects_profile_id=args.voice_effects_profile_id
-            )
+        voice = GoogleVoice.from_args(args)
         return (encoder, voice)

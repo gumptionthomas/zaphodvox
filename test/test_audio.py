@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import call, patch
 
 from zaphodvox.audio import concat_files
-from zaphodvox.manifest import Manifest, SpeechAudioFile
+from zaphodvox.manifest import Fragment, Manifest
 
 
 class TestConcat():
@@ -12,10 +12,10 @@ class TestConcat():
         audio_path = Path('/path/to/audio')
         filenames = [f'audio-file-0000{i}.wav' for i in range(3)]
         output_filepath = Path('/path/to/output.wav')
-        speech_audio_files = [
-            SpeechAudioFile(filename=f, text=str(f)) for f in filenames
+        fragments = [
+            Fragment(filename=f, text=str(f)) for f in filenames
         ]
-        manifest = Manifest(speech_audio_files=speech_audio_files)
+        manifest = Manifest(fragments=fragments)
         mock_segments = mock_audio_segment()
         mock_audio_segment.empty.return_value = mock_segments
         mock_audio_segment.from_file.return_value = mock_segments

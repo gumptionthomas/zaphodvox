@@ -1,7 +1,9 @@
 from pathlib import Path
-from unittest.mock import call, patch, mock_open
+from unittest.mock import call, mock_open, patch
 
 from zaphodvox.googlecloud.encoder import GoogleEncoder
+from zaphodvox.manifest import Manifest
+from zaphodvox.text import parse_text
 from zaphodvox.googlecloud.voice import GoogleVoice
 
 
@@ -21,15 +23,18 @@ class TestEncoder():
         voice = GoogleVoice(
             voice_id='A', language='en', region='UK', type='Wavenet'
         )
-
-        GoogleEncoder().encode(
-            full_text, basename, path, voice, silence_duration=100
+        fragments = parse_text(full_text, voice=voice)
+        manifest = Manifest.plan(
+            fragments, basename, 'wav',
+            silence_duration=100
         )
+
+        GoogleEncoder().encode_manifest(manifest, path, silence_duration=100)
 
         expected_calls = [
             call(text, voice, path) for text, path in [
                 ('Paragraph 1', path / f'{basename}-00000.wav'),
-                # Skip {basename}-00001.wav because of silent text block
+                # Skip {basename}-00001.wav because of silent text fragment
                 ('Paragraph 2', path / f'{basename}-00002.wav'),
                 ('Paragraph 3', path / f'{basename}-00003.wav')
             ]

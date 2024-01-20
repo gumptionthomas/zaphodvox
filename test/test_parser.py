@@ -1,16 +1,9 @@
-import json
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
-from unittest.mock import mock_open, patch
 
 import pytest
-
-from zaphodvox.elevenlabs.encoder import ElevenLabsEncoder
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
-from zaphodvox.googlecloud.encoder import GoogleEncoder
-from zaphodvox.googlecloud.voice import GoogleVoice
-from zaphodvox.parser import parse_voices, parse_args
+from zaphodvox.parser import parse_args
 
 
 class TestArgParser():
@@ -18,9 +11,9 @@ class TestArgParser():
         args = parse_args(['test.txt'])
 
         # General
-        assert args.textfile == Path('test.txt')
-        assert args.encoder == 'google'
-        assert args.voices is None
+        assert args.inputfile == Path('test.txt')
+        assert args.encoder is None
+        assert args.voices_file is None
         assert args.voice_id is None
         assert args.max_chars is None
         assert args.silence_duration == 500
@@ -28,6 +21,7 @@ class TestArgParser():
         assert not args.clean
         assert not args.encode
         assert not args.copy
+        assert args.copy_dir is None
         assert not args.concat
         assert args.concat_out is None
         assert args.manifest is True
@@ -45,7 +39,7 @@ class TestArgParser():
         assert args.google_audio_format == 'linear16'
         assert args.service_account is None
         # ElevenLabs
-        assert args.voice_model == 'multilingual_v2'
+        assert args.voice_model == 'eleven_multilingual_v2'
         assert args.voice_stability is None
         assert args.voice_similarity_boost is None
         assert args.voice_style is None
@@ -76,83 +70,3 @@ class TestArgParser():
         ]
         with (pytest.raises(SystemExit), redirect_stderr(StringIO())):
             parse_args(sys_args)
-
-
-class TestLoadNamedVoices():
-    @patch(
-        'builtins.open',
-        new_callable=mock_open,
-        read_data = json.dumps({
-            'voices': {
-                'voice_1': {
-                    'google': {
-                        'voice_id': 'A',
-                        'language': 'en',
-                        'region': 'US',
-                        'type': 'Wavenet'
-                    },
-                    'elevenlabs': {'voice_id': 'Josh'}
-                },
-                'voice_2': {
-                    'elevenlabs': {
-                        'voice_id': 'Adam',
-                        'model': 'multilingual_v2'
-                    }
-                }
-            }
-        })
-    )
-    def test_parse_voices_elevenlabs(self, mock_builtins_open, *args):
-        filepath = Path('/path/to/voices.json')
-
-        voices = parse_voices(ElevenLabsEncoder(), filepath)
-
-        mock_builtins_open.assert_called_once_with(str(filepath), 'r')
-        assert voices == {
-            'voice_1': ElevenLabsVoice(voice_id='Josh'),
-            'voice_2': ElevenLabsVoice(voice_id='Adam', model='multilingual_v2')
-        }
-
-    @patch(
-        'builtins.open',
-        new_callable=mock_open,
-        read_data = json.dumps({
-            'voices': {
-                'voice_1': {
-                    'google': {
-                        'voice_id': 'A',
-                        'language': 'en',
-                        'region': 'US',
-                        'type': 'Wavenet'
-                    },
-                    'elevenlabs': {'voice_id': 'Josh'}
-                },
-                'voice_2': {
-                    'elevenlabs': {'voice_id': 'Adam'}
-                }
-            }
-        })
-    )
-    @patch('zaphodvox.googlecloud.encoder.TextToSpeechClient')
-    def test_parse_voices_google(self, mock_t2s_client, mock_builtins_open):
-        filepath = Path('/path/to/voices.json')
-        service_account_filepath = Path('/path/to/service_account.json')
-        google_encoder = GoogleEncoder(
-            service_account_filepath=service_account_filepath
-        )
-        mock_t2s_client.from_service_account_file.assert_called_once_with(
-            str(service_account_filepath)
-        )
-
-        voices = parse_voices(google_encoder, filepath)
-
-        mock_builtins_open.assert_called_once_with(str(filepath), 'r')
-        assert voices == {
-            'voice_1': GoogleVoice(
-                voice_id='A',
-                language='en',
-                region='US',
-                type='Wavenet'
-            ),
-            'voice_2': None
-        }

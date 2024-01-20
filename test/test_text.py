@@ -1,5 +1,4 @@
 import pytest
-
 from zaphodvox.googlecloud.voice import GoogleVoice
 from zaphodvox.text import clean_text, parse_text
 
@@ -33,21 +32,22 @@ class TestTextParser():
             voice_id='B', language='en', region='US', type='Wavenet'
         )
 
-        text_blocks = parse_text(
+        text_fragments = parse_text(
             full_text, voice=voice, voices={'Joe': parsed_voice}
         )
 
-        assert len(text_blocks) == 3
-        assert text_blocks[0] == ('Paragraph 1', voice)
-        assert (text_blocks[1][0], text_blocks[1][1]) == \
-            ('Paragraph 2', parsed_voice)
-        assert (text_blocks[2][0], text_blocks[2][1]) == \
-            ('Paragraph 3', parsed_voice)
+        assert len(text_fragments) == 3
+        assert text_fragments[0].text == 'Paragraph 1'
+        assert text_fragments[0].voice == voice
+        assert text_fragments[1].text == 'Paragraph 2'
+        assert text_fragments[1].voice == parsed_voice
+        assert text_fragments[2].text == 'Paragraph 3'
+        assert text_fragments[2].voice == parsed_voice
 
     def test_parse_max_chars(self):
         full_text = (
             "Paragraph 1\nZVOX: Joe\nParagraph 2\n\n"
-            "ZVOX: Josh\nParagraph 3\n"
+            "ZVOX: Josh\nParagraph 3\n\nParagraph 4"
         )
         voice = GoogleVoice(
             voice_id='A', language='en', region='UK', type='Wavenet'
@@ -56,14 +56,18 @@ class TestTextParser():
             voice_id='B', language='en', region='US', type='Wavenet'
         )
 
-        text_blocks = parse_text(
-            full_text, voice=voice, voices={'Joe': parsed_voice}, max_chars=25
+        text_fragments = parse_text(
+            full_text, voice=voice, voices={'Joe': parsed_voice}, max_chars=30
         )
-
-        assert len(text_blocks) == 2
-        assert text_blocks[0] == ('Paragraph 1', voice)
-        assert (text_blocks[1][0], text_blocks[1][1]) == \
-            ('Paragraph 2\n\nParagraph 3\n', parsed_voice)
+        assert len(text_fragments) == 4
+        assert text_fragments[0].text == 'Paragraph 1\n'
+        assert text_fragments[0].voice == voice
+        assert text_fragments[1].text == 'Paragraph 2\n\nParagraph 3\n\n'
+        assert text_fragments[1].voice == parsed_voice
+        assert text_fragments[2].text == ''
+        assert text_fragments[2].voice is None
+        assert text_fragments[3].text == 'Paragraph 4'
+        assert text_fragments[3].voice == parsed_voice
 
     def test_encode_no_voice(self, *args):
         with pytest.raises(ValueError):
