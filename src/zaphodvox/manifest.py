@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel
@@ -38,9 +39,28 @@ class Manifest(BaseModel):
     voices: Optional[dict[str, NamedVoicesConfiguration]] = None
     """The named voice configurations."""
 
+    @property
+    def file_extension(self) -> Optional[str]:
+        """The file extension of the audio file fragments.
+
+        Returns:
+            The file extension of the audio file fragments.
+        """
+        file_ext = None
+        for fragment in self.fragments:
+            if fragment.filename:
+                file_ext = Path(fragment.filename).suffix[1:]
+                break
+        return file_ext
+
     def set_used_voices(
         self, voices: Optional[dict[str, NamedVoicesConfiguration]]
     ) -> None:
+        """Sets the used voices for the audio file fragments.
+
+        Args:
+            voices: The named voice configurations.
+        """
         used_voice_names = set(
             f.voice_name for f in self.fragments if f.voice_name is not None
         )
@@ -68,9 +88,11 @@ class Manifest(BaseModel):
         """
         manifest = Manifest()
         for i, fragment in enumerate(fragments):
+            filename = fragment.filename or f'{basename}-{i:05}.{file_ext}'
+            filename = str(Path(filename).with_suffix(f'.{file_ext}'))
             new_fragment = Fragment(
                 text=fragment.text,
-                filename=f'{basename}-{i:05}.{file_ext}',
+                filename=filename,
                 voice=fragment.voice,
                 voice_name=fragment.voice_name
             )

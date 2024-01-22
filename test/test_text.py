@@ -21,6 +21,7 @@ class TestCleanText():
 
 class TestTextParser():
     def test_parse(self):
+        # Setup
         full_text = (
             "Paragraph 1\nZVOX: Joe\nParagraph 2\n"
             "ZVOX: Josh\nParagraph 3"
@@ -32,10 +33,12 @@ class TestTextParser():
             voice_id='B', language='en', region='US', type='Wavenet'
         )
 
+        # Run
         text_fragments = parse_text(
             full_text, voice=voice, voices={'Joe': parsed_voice}
         )
 
+        # Verify
         assert len(text_fragments) == 3
         assert text_fragments[0].text == 'Paragraph 1'
         assert text_fragments[0].voice == voice
@@ -45,6 +48,7 @@ class TestTextParser():
         assert text_fragments[2].voice == parsed_voice
 
     def test_parse_max_chars(self):
+        # Setup
         full_text = (
             "Paragraph 1\nZVOX: Joe\nParagraph 2\n\n"
             "ZVOX: Josh\nParagraph 3\n\nParagraph 4"
@@ -56,9 +60,12 @@ class TestTextParser():
             voice_id='B', language='en', region='US', type='Wavenet'
         )
 
+        # Run
         text_fragments = parse_text(
             full_text, voice=voice, voices={'Joe': parsed_voice}, max_chars=30
         )
+
+        # Verify
         assert len(text_fragments) == 4
         assert text_fragments[0].text == 'Paragraph 1\n'
         assert text_fragments[0].voice == voice

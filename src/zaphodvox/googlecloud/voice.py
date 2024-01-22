@@ -74,20 +74,27 @@ class GoogleVoice(Voice):
         Returns:
             An `GoogleVoice` instance, `None` if insufficient arguments.
         """
-        voice = None
-        if None not in [
-            args.voice_id, args.voice_language,
-            args.voice_region, args.voice_type
-        ]:
-            voice = cls(
-                voice_id=args.voice_id,
-                language=args.voice_language,
-                region=args.voice_region,
-                type=args.voice_type,
-                speaking_rate=args.voice_speaking_rate,
-                pitch=args.voice_pitch,
-                volume_gain_db=args.voice_volume_gain_db,
-                sample_rate_hertz=args.voice_sample_rate_hertz,
-                effects_profile_id=args.voice_effects_profile_id
-            )
-        return voice
+        voice_id: str = args.voice_id
+        voice_language: str = args.voice_language
+        voice_region: str = args.voice_region
+        voice_type: str = args.voice_type
+        voice_speaking_rate: Optional[float] = args.voice_speaking_rate
+        voice_pitch: Optional[float] = args.voice_pitch
+        voice_volume_gain_db: Optional[float] = args.voice_volume_gain_db
+        voice_sample_rate_hertz: Optional[int] = args.voice_sample_rate_hertz
+        voice_effects_profile_id: Optional[list[str]] = \
+            args.voice_effects_profile_id
+
+        if not all([voice_id, voice_language, voice_region, voice_type]):
+            return None
+        return cls(
+            voice_id=voice_id,
+            language=voice_language,
+            region=voice_region,
+            type=voice_type,
+            speaking_rate=voice_speaking_rate,
+            pitch=voice_pitch,
+            volume_gain_db=voice_volume_gain_db,
+            sample_rate_hertz=voice_sample_rate_hertz,
+            effects_profile_id=voice_effects_profile_id
+        )

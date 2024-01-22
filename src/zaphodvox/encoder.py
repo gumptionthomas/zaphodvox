@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,9 @@ class Encoder(ABC):
     """The Encoder class is responsible for converting text to speech using
     different voices and saving the audio files.
     """
+
+    name: Optional[str] = None
+    """The name of the encoder."""
 
     @property
     @abstractmethod
@@ -31,6 +35,24 @@ class Encoder(ABC):
 
         Returns:
             The file extension.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def from_args(
+        cls, args: Namespace
+    ) -> tuple['Encoder', Optional[Voice]]:
+        """Create an instance of the `Encoder` class and an optional
+        `Voice` instance based on the provided arguments.
+
+        Args:
+            cls: The class object of the `Encoder`.
+            args: The command-line arguments.
+
+        Returns:
+            A tuple containing the `Encoder` instance and an optional
+                `Voice` instance.
         """
         raise NotImplementedError
 
@@ -70,7 +92,7 @@ class Encoder(ABC):
         with ProgressBar('Encode', total=total_chars) as bar:
             for fragment in fragments:
                 if fragment.filename is not None:
-                    filepath = encode_dir.joinpath(fragment.filename)
+                    filepath = encode_dir / fragment.filename
                     filepath = filepath.with_suffix(f'.{self.file_extension}')
                     duration = fragment.silence_duration
                     if silence_duration is not None:
@@ -89,6 +111,6 @@ class Encoder(ABC):
                         create_silence(duration, filepath, self.file_extension)
                     fragment.encoded = datetime.now(timezone.utc)
                     fragment.filename = filepath.name
-                    fragment.encoder = self.__class__.__name__
+                    fragment.encoder = self.name
                     fragment.audio_format = self.audio_format
         return manifest

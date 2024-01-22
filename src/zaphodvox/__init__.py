@@ -22,4 +22,4 @@ a text file into synthetic speech audio using either the
  or the [ElevenLabs Speech Synthesis API](https://elevenlabs.io/docs).
 """
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'

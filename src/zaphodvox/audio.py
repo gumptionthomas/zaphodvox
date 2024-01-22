@@ -37,36 +37,36 @@ def concat_files(
             concatenated audio will be saved.
     """
     filepaths = [
-        audio_dir.joinpath(fragment.filename)
+        audio_dir / fragment.filename
         for fragment in manifest.fragments if fragment.filename
     ]
-    with ProgressBar('Concat', total=len(filepaths)) as bar:
-        segments: AudioSegment = AudioSegment.empty()
+    with ProgressBar('Concat', total=len(filepaths)+1) as bar:
+        segments = AudioSegment.empty()
         for filepath in filepaths:
             segments += AudioSegment.from_file(
-                str(audio_dir.joinpath(filepath)),
+                str(audio_dir / filepath),
                 format=format
             )
             bar.next()
         segments.export(str(output_filepath), format=format)
+        bar.next()
 
 
-def copy_files(audio_dir: Path, manifest: Manifest, copy_path: Path) -> None:
-    """Copies the encoded files from the audio directory to the current
-    working directory.
+def copy_files(audio_dir: Path, manifest: Manifest, copy_dir: Path) -> None:
+    """Copies the encoded files from the audio directory to the copy directory.
 
     Args:
         audio_dir: The directory `Path` containing the fragment audio files.
         manifest: The `Manifest` containing the fragment audio files to copy.
-        copy_path: The `Path` to the directory where the fragment audio files
+        copy_dir: The `Path` to the directory where the fragment audio files
             will be copied.
     """
     filepaths = [
-        audio_dir.joinpath(fragment.filename)
+        audio_dir / fragment.filename
         for fragment in manifest.fragments if fragment.filename
     ]
     with ProgressBar('Copy', total=len(filepaths)) as bar:
         for filepath in filepaths:
             if filepath.exists():
-                shutil.copy(str(filepath), str(copy_path))
+                shutil.copy(str(filepath), str(copy_dir))
             bar.next()

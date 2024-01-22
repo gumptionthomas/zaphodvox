@@ -2,6 +2,7 @@ from argparse import Action, ArgumentParser, BooleanOptionalAction, Namespace
 from pathlib import Path
 from typing import Any, Optional, Sequence, get_args
 
+from zaphodvox.encoder import Encoder
 from zaphodvox.elevenlabs.encoder import AudioFormat as ElevenLabsAudioFormat
 from zaphodvox.googlecloud.encoder import AudioFormat as GoogleAudioFormat
 
@@ -71,38 +72,51 @@ def parse_args(args: list) -> Namespace:
     parser.add_argument(
         'inputfile',
         type=Path,
+        nargs='?',
         help=(
             'The text file or manifest to encode '
             '(e.g. "gone_bananas.txt" or "gone_bananas-manifest.json")'
         )
     )
     parser.add_argument(
-        '--encoder',
-        choices=['google', 'elevenlabs'],
-        default=None,
-        help='The encoder to use'
+        '-v',
+        '--version',
+        action='store_true',
+        default=False,
+        help='Print the version number and exit'
     )
     parser.add_argument(
+        '-e',
+        '--encoder-name',
+        choices=[e.name for e in Encoder.__subclasses__()],
+        default=None,
+        help='The name of the encoder to use'
+    )
+    parser.add_argument(
+        '-f',
         '--voices-file',
         type=Path,
         default=None,
         help='A JSON file containing named voices'
     )
     parser.add_argument(
-        '--voice-id',
+        '-n',
+        '--voice-name',
         default=None,
-        help='The voice ID to use'
+        help='The voice name in the `voices-file` to use'
     )
     parser.add_argument(
+        '-m',
         '--max-chars',
         type=int,
         default=None,
         help=(
             'The maximum number of characters per fragment '
-            '(default: one fragment per line)'
+            '(default: one line per fragment)'
         )
     )
     parser.add_argument(
+        '-s',
         '--silence-duration',
         type=int,
         default=500,
@@ -112,11 +126,22 @@ def parse_args(args: list) -> Namespace:
         )
     )
     parser.add_argument(
+        '-b',
         '--basename',
         default=None,
         help=(
             'The basename of any output file(s) '
             '(default: [basename of inputfile] e.g. "gone_bananas")'
+        )
+    )
+    parser.add_argument(
+        '-i',
+        '--indexes',
+        type=list_of_ints,
+        default=None,
+        help=(
+            'The comma-delimited list of manifest audio file indexes '
+            '(0-based) to encode (default: all indexes)'
         )
     )
     parser.add_argument(
@@ -201,7 +226,7 @@ def parse_args(args: list) -> Namespace:
     parser.add_argument(
         '--no-manifest',
         action='store_false',
-        dest='manifest',
+        dest='save_manifest',
         default=True,
         help='Do not create a manifest file'
     )
@@ -216,13 +241,9 @@ def parse_args(args: list) -> Namespace:
         )
     )
     parser.add_argument(
-        '--manifest-indexes',
-        type=list_of_ints,
+        '--voice-id',
         default=None,
-        help=(
-            'The comma-delimited list of manifest audio file indexes '
-            '(0-based) to encode (default: all indexes)'
-        )
+        help='The voice ID to use'
     )
     google_group = parser.add_argument_group(
         'google options',
