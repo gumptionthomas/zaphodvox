@@ -43,6 +43,9 @@ class ElevenLabsEncoder(Encoder):
     convert text to speech and save it as an audio file.
     """
 
+    name: Optional[str] = 'elevenlabs'
+    """The name of the ElevenLabs Text-to-Speech encoder."""
+
     def __init__(self, audio_format: Optional[AudioFormat] = None) -> None:
         """Initialize the `ElevenLabsEncoder` object.
 
@@ -126,7 +129,7 @@ class ElevenLabsEncoder(Encoder):
     @classmethod
     def from_args(
         cls, args: Namespace
-    ) -> tuple['ElevenLabsEncoder', Optional[ElevenLabsVoice]]:
+    ) -> tuple[Encoder, Optional[Voice]]:
         """Create an instance of `ElevenLabsEncoder` and an optional
         `ElevenLabsVoice` instance based on the provided arguments.
 
@@ -138,8 +141,12 @@ class ElevenLabsEncoder(Encoder):
             A tuple containing an instance of the `ElevenLabsEncoder` class
                 and an optional `ElevenLabsVoice` instance.
         """
-        if args.api_key:
-            set_api_key(args.api_key)
-        encoder = cls(audio_format=args.elevenlabs_audio_format)
+        api_key: Optional[str] = args.api_key
+        elevenlabs_audio_format: Optional[AudioFormat] = \
+            args.elevenlabs_audio_format
+
+        if api_key:
+            set_api_key(api_key)
+        encoder = cls(audio_format=elevenlabs_audio_format)
         voice = ElevenLabsVoice.from_args(args)
         return (encoder, voice)

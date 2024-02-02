@@ -116,19 +116,18 @@ def split_text(text: str, max_chars: int) -> str:
     """
     if len(text) <= max_chars:
         return text
+    i = max(
+        text.rfind('.', 0, max_chars),
+        text.rfind('?', 0, max_chars),
+        text.rfind('!', 0, max_chars)
+    )
+    if i == -1:
+        i = text.rfind(' ', 0, max_chars)
     else:
-        i = max(
-            text.rfind('.', 0, max_chars),
-            text.rfind('?', 0, max_chars),
-            text.rfind('!', 0, max_chars)
-        )
-        if i == -1:
-            i = text.rfind(' ', 0, max_chars)
-        else:
-            i = text.find(' ', i, max_chars)
-        if i == -1:
-            i = max_chars
-        return text[:i] + '\n\n' + split_text(text[i:].lstrip(), max_chars)
+        i = text.find(' ', i, max_chars)
+    if i == -1:
+        i = max_chars
+    return text[:i] + '\n\n' + split_text(text[i:].lstrip(), max_chars)
 
 
 def clean_text(text: str, max_chars: Optional[int] = None) -> str:

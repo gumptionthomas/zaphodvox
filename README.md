@@ -20,6 +20,8 @@ $ pip uninstall zaphodvox
 Successfully uninstalled zaphodvox...
 ```
 
+`zaphodvox` also requires a working installation of [ffmpeg](https://ffmpeg.org/).
+
 # Authorization
 
 > "He didn't know why he had become President of the Galaxy, except that it seemed a fun thing to be."
@@ -48,7 +50,7 @@ Detailed usage information can be printed by running:
 $ zaphodvox --help
 ```
 
-Some examples using this text file (`gone-bananas.txt`):
+Some examples using the following text file (`gone-bananas.txt`):
 
 ```text
 This is the first line of text.
@@ -124,7 +126,7 @@ The text file will be cleaned before being encoded and concatenated into `gone-b
 
 Multiple voice configurations can be defined in a JSON file and loaded via the `--voices-file` argument.
 
-An example voice configuration file (`voices.json`):
+This is an example voice configuration file (`voices.json`):
 
 ```json
 {
@@ -166,7 +168,7 @@ An example voice configuration file (`voices.json`):
 }
 ```
 
-If a `--voices-file` JSON file is used, inline `ZVOX: [name]` tags in a text `inputfile` can specify the voice(s) to be used.
+If a `--voices-file` is used, inline `ZVOX: [name]` tags in a text `inputfile` can specify the voice(s) to be used.
 
 A example multi-voice text file (`heart-of-gold.txt`):
 
@@ -177,7 +179,7 @@ specified Google voice (i.e. "en-US-F-Wavenet") or ElevenLabs voice (i.e. voice 
 depending on which encoder is used.
 
 ZVOX: Ford
-This will line be spoken by the Ford voice. That is, it will use either the specified Google voice
+This line will be spoken by the Ford voice. That is, it will use either the specified Google voice
 (i.e. "en-US-D-Wavenet") or ElevenLabs voice (i.e. voice ID "TxGEqnHWrfWFTfGW9XjX") depending on which
 encoder is used.
 

@@ -37,6 +37,9 @@ class GoogleEncoder(Encoder):
     convert text to speech and save it as an audio file.
     """
 
+    name: Optional[str] = 'google'
+    """The name of the Google Text-to-Speech encoder."""
+
     def __init__(
         self,
         service_account_filepath: Optional[Path] = None,
@@ -129,7 +132,7 @@ class GoogleEncoder(Encoder):
     @classmethod
     def from_args(
         cls, args: Namespace
-    ) -> tuple['GoogleEncoder', Optional[GoogleVoice]]:
+    ) -> tuple[Encoder, Optional[Voice]]:
         """Create an instance of the `GoogleEncoder` class and an optional
         `GoogleVoice` instance based on the provided arguments.
 
@@ -141,9 +144,12 @@ class GoogleEncoder(Encoder):
             A tuple containing the `GoogleEncoder` instance and an optional
                 `GoogleVoice` instance.
         """
+        service_account: Optional[Path] = args.service_account
+        google_audio_format: Optional[AudioFormat] = args.google_audio_format
+
         encoder = cls(
-            service_account_filepath=args.service_account,
-            audio_format=args.google_audio_format
+            service_account_filepath=service_account,
+            audio_format=google_audio_format
         )
         voice = GoogleVoice.from_args(args)
         return (encoder, voice)

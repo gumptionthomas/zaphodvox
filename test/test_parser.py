@@ -12,19 +12,22 @@ class TestArgParser():
 
         # General
         assert args.inputfile == Path('test.txt')
-        assert args.encoder is None
+        assert args.version is False
+        assert args.encoder_name is None
         assert args.voices_file is None
+        assert args.voice_name is None
         assert args.voice_id is None
         assert args.max_chars is None
         assert args.silence_duration == 500
         assert args.basename is None
+        assert args.indexes is None
         assert not args.clean
         assert not args.encode
         assert not args.copy
         assert args.copy_dir is None
         assert not args.concat
         assert args.concat_out is None
-        assert args.manifest is True
+        assert args.save_manifest is True
         assert args.manifest_out is None
         assert not args.delete_history
         # Google
@@ -48,25 +51,16 @@ class TestArgParser():
         assert args.api_key is None
 
     def test_parser_scalar(self):
-        sys_args = [
-            '--voice-stability=0.5',
-            'test.txt'
-        ]
+        sys_args = ['--voice-stability=0.5', 'test.txt']
         args = parse_args(sys_args)
         assert args.voice_stability == 0.5
 
     def test_parser_large_scalar(self):
-        sys_args = [
-            '--voice-stability=42.42',
-            'test.txt'
-        ]
+        sys_args = ['--voice-stability=42.42', 'test.txt']
         with (pytest.raises(SystemExit), redirect_stderr(StringIO())):
             parse_args(sys_args)
 
     def test_parser_small_scalar(self):
-        sys_args = [
-            '--voice-stability=-42.42',
-            'test.txt'
-        ]
+        sys_args = ['--voice-stability=-42.42', 'test.txt']
         with (pytest.raises(SystemExit), redirect_stderr(StringIO())):
             parse_args(sys_args)

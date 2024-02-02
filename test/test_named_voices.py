@@ -1,5 +1,4 @@
-import json
-from unittest.mock import mock_open, patch
+from unittest.mock import mock_open
 
 from pathlib import Path
 
@@ -9,66 +8,40 @@ from zaphodvox.googlecloud.voice import GoogleVoice
 
 
 class TestLoadNamedVoices():
-    @patch(
-        'builtins.open',
-        new_callable=mock_open,
-        read_data = json.dumps({
-            'voices': {
-                'voice_1': {
-                    'google': {
-                        'voice_id': 'A',
-                        'language': 'en',
-                        'region': 'US',
-                        'type': 'Wavenet'
-                    },
-                    'elevenlabs': {'voice_id': 'Josh'}
-                },
-                'voice_2': {
-                    'elevenlabs': {
-                        'voice_id': 'Adam',
-                        'model': 'multilingual_v2'
-                    }
-                }
-            }
-        })
-    )
-    def test_parse_voices_elevenlabs(self, mock_builtins_open, *args):
+    def test_parse_voices_elevenlabs(
+        self, mock_builtins_open, voices_json_data
+    ):
+        # Setup
+        mock_builtins_open.return_value = mock_open(
+            read_data=voices_json_data
+        ).return_value
+
         filepath = Path('/path/to/voices.json')
 
-        voices = read_voices(filepath)
+        # Run
+        voices = read_voices(filepath, None)
 
+        # Verify
         mock_builtins_open.assert_called_once_with(str(filepath), 'r')
         encoder_voices = voices.encoder_voices('elevenlabs')
         assert encoder_voices == {
-            'voice_1': ElevenLabsVoice(voice_id='Josh'),
-            'voice_2': ElevenLabsVoice(voice_id='Adam', model='multilingual_v2')
+            'voice_1': ElevenLabsVoice(voice_id='Ford'),
+            'voice_2': ElevenLabsVoice(
+                voice_id='Arthur', model='eleven_multilingual_v2'
+            )
         }
 
-    @patch(
-        'builtins.open',
-        new_callable=mock_open,
-        read_data = json.dumps({
-            'voices': {
-                'voice_1': {
-                    'google': {
-                        'voice_id': 'A',
-                        'language': 'en',
-                        'region': 'US',
-                        'type': 'Wavenet'
-                    },
-                    'elevenlabs': {'voice_id': 'Josh'}
-                },
-                'voice_2': {
-                    'elevenlabs': {'voice_id': 'Adam'}
-                }
-            }
-        })
-    )
-    def test_parse_voices_google(self, mock_builtins_open):
+    def test_parse_voices_google(self, mock_builtins_open, voices_json_data):
+        # Setup
+        mock_builtins_open.return_value = mock_open(
+            read_data=voices_json_data
+        ).return_value
         filepath = Path('/path/to/voices.json')
 
-        voices = read_voices(filepath)
+        # Run
+        voices = read_voices(filepath, None)
 
+        # Verify
         mock_builtins_open.assert_called_once_with(str(filepath), 'r')
         encoder_voices = voices.encoder_voices('google')
         assert encoder_voices == {

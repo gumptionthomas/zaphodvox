@@ -50,14 +50,20 @@ class ElevenLabsVoice(Voice):
         Returns:
             An `ElevenLabsVoice` instance, `None` if insufficient arguments.
         """
-        voice = None
-        if args.voice_id is not None:
-            voice = ElevenLabsVoice(
-                voice_id=args.voice_id,
-                model=args.voice_model,
-                stability=args.voice_stability,
-                similarity_boost=args.voice_similarity_boost,
-                style=args.voice_style,
-                use_speaker_boost=args.voice_use_speaker_boost
-            )
-        return voice
+        voice_id: Optional[str] = args.voice_id
+        voice_model: Optional[str] = args.voice_model
+        voice_stability: Optional[float] = args.voice_stability
+        voice_similarity_boost: Optional[float] = args.voice_similarity_boost
+        voice_style: Optional[float] = args.voice_style
+        voice_use_speaker_boost: Optional[bool] = args.voice_use_speaker_boost
+
+        if voice_id is None:
+            return None
+        return cls(
+            voice_id=voice_id,
+            model=voice_model,
+            stability=voice_stability,
+            similarity_boost=voice_similarity_boost,
+            style=voice_style,
+            use_speaker_boost=voice_use_speaker_boost
+        )
