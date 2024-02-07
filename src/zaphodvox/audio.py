@@ -40,17 +40,14 @@ def concat_files(
         audio_dir / fragment.filename
         for fragment in manifest.fragments if fragment.filename
     ]
-    with ProgressBar('Concat', total=len(filepaths)+1) as bar:
+    with ProgressBar('Concatinating', total=len(filepaths)) as bar:
         segments = AudioSegment.empty()
         for filepath in filepaths:
-            segments += AudioSegment.from_file(
-                str(audio_dir / filepath),
-                format=format
-            )
+            segments += AudioSegment.from_file(str(filepath), format=format)
             bar.next()
+    with ProgressBar('Exporting', total=None) as bar:
         segments.export(str(output_filepath), format=format)
-        bar.next()
-
+        bar.stop()
 
 def copy_files(audio_dir: Path, manifest: Manifest, copy_dir: Path) -> None:
     """Copies the encoded files from the audio directory to the copy directory.

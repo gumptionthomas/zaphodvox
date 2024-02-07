@@ -24,8 +24,7 @@ class TestEncoder():
         )
         fragments = parse_text(full_text, voice=voice)
         manifest = Manifest.plan(
-            fragments, basename, 'wav',
-            silence_duration=100
+            fragments, basename, 'wav', silence_duration=100
         )
         mock_write = mock_builtins_open.return_value.write
         mock_audio_segment_cls, mock_audio_segment = mock_audio
@@ -40,7 +39,7 @@ class TestEncoder():
         assert mock_google.client.synthesize_speech.call_count == 3
         # Fragment #0
         request = {
-            'input': SynthesisInput(text='Paragraph 1'),
+            'input': SynthesisInput(ssml='<speak>Paragraph 1</speak>'),
             'voice': voice.voice_selection_params,
             'audio_config': voice.get_audio_config(AudioEncoding.LINEAR16)
         }
@@ -56,7 +55,7 @@ class TestEncoder():
         )
         # Fragment #2
         request = {
-            'input': SynthesisInput(text='Paragraph 2'),
+            'input': SynthesisInput(ssml='<speak>Paragraph 2</speak>'),
             'voice': voice.voice_selection_params,
             'audio_config': voice.get_audio_config(AudioEncoding.LINEAR16)
         }
@@ -67,7 +66,7 @@ class TestEncoder():
         assert mock_write.call_args_list[1] == call(mock_google.audio_content)
         # Fragment #3
         request = {
-            'input': SynthesisInput(text='Paragraph 3'),
+            'input': SynthesisInput(ssml='<speak>Paragraph 3</speak>'),
             'voice': voice.voice_selection_params,
             'audio_config': voice.get_audio_config(AudioEncoding.LINEAR16)
         }
@@ -80,5 +79,68 @@ class TestEncoder():
         assert mock_google.client.synthesize_speech.call_count == 3
         # Progress bar
         mock_progress_bar.assert_called_once_with(
-            'Encode', total=sum(len(t) for t in full_text.split('\n'))
+            'Encoding', total=sum(len(t) for t in full_text.split('\n'))
+        )
+
+    @patch('zaphodvox.encoder.ProgressBar')
+    def test_encode_max_chars(
+        self, mock_progress_bar, mock_builtins_open, mock_google,
+        mock_audio
+    ):
+        # Setup
+        full_text = "Paragraph 1\n\nParagraph 2\nParagraph 3"
+        basename = 'output'
+        path = Path('/path/to')
+        voice = GoogleVoice(
+            voice_id='A', language='en', region='UK', type='Wavenet'
+        )
+        fragments = parse_text(full_text, voice=voice, max_chars=30)
+        manifest = Manifest.plan(
+            fragments, basename, 'wav', silence_duration=100
+        )
+        mock_write = mock_builtins_open.return_value.write
+        mock_audio_segment_cls, mock_audio_segment = mock_audio
+
+        # Run
+        GoogleEncoder().encode_manifest(manifest, path, silence_duration=100)
+
+        # Verify
+        # Google client
+        mock_google.client_cls.assert_called_once_with()
+        # Google client synthesize_speech
+        assert mock_google.client.synthesize_speech.call_count == 2
+        # Fragment #0
+        mock_audio_segment_cls.silent.assert_not_called()
+        request = {
+            'input': SynthesisInput(
+                ssml='<speak>Paragraph 1<break time=\"0.100s\"/>\n'
+                'Paragraph 2\n</speak>'
+            ),
+            'voice': voice.voice_selection_params,
+            'audio_config': voice.get_audio_config(AudioEncoding.LINEAR16)
+        }
+        mock_google.client.synthesize_speech.assert_any_call(request=request)
+        mock_builtins_open.assert_any_call(
+            str(path / f'{basename}-00000.wav'), 'wb'
+        )
+        assert mock_write.call_args_list[0] == call(mock_google.audio_content)
+        # Fragment #1
+        request = {
+            'input': SynthesisInput(ssml='<speak>Paragraph 3</speak>'),
+            'voice': voice.voice_selection_params,
+            'audio_config': voice.get_audio_config(AudioEncoding.LINEAR16)
+        }
+        mock_google.client.synthesize_speech.assert_any_call(request=request)
+        mock_builtins_open.assert_any_call(
+            str(path / f'{basename}-00001.wav'), 'wb'
+        )
+        assert mock_write.call_args_list[1] == call(mock_google.audio_content)
+        # No other synthesize_speech calls
+        assert mock_google.client.synthesize_speech.call_count == 2
+        # Progress bar
+        mock_progress_bar.assert_called_once_with(
+            'Encoding', total=(
+                sum(len(t) for t in full_text.split('\n')) +
+                len('<break time=\"0.100s\"/>') + 2 # newlines
+            )
         )

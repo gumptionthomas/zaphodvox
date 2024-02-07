@@ -44,7 +44,7 @@ class TestMain():
         mock_builtins_open.assert_any_call('voices.json', 'r')
         # Google client synthesize_speech
         request = {
-            'input': SynthesisInput(text=text_to_encode),
+            'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
             'voice': google_voice.voice_selection_params,
             'audio_config': google_voice.get_audio_config(
                 AudioEncoding.LINEAR16
@@ -113,7 +113,7 @@ class TestMain():
         assert mock_google.client.synthesize_speech.call_count == 2
         # Fragment #0
         request = {
-            'input': SynthesisInput(text='Text 0'),
+            'input': SynthesisInput(ssml='<speak>Text 0</speak>'),
             'voice': google_voice.voice_selection_params,
             'audio_config': google_voice.get_audio_config(
                 AudioEncoding.LINEAR16
@@ -123,7 +123,7 @@ class TestMain():
         mock_builtins_open.assert_any_call('test-00000.wav', 'wb')
         assert mock_write.call_args_list[0] == call(mock_google.audio_content)
         # Fragment #2
-        request['input'] = SynthesisInput(text='Text 2')
+        request['input'] = SynthesisInput(ssml='<speak>Text 2</speak>')
         mock_google.client.synthesize_speech.assert_any_call(request=request)
         mock_builtins_open.assert_any_call('test-00002.wav', 'wb')
         assert mock_write.call_args_list[1] == call(mock_google.audio_content)
@@ -413,7 +413,7 @@ class TestMain():
         # Google client synthesize_speech
         mock_temp_dir.temp_dir_cls.assert_called_once_with()
         request = {
-            'input': SynthesisInput(text=text_to_encode),
+            'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
             'voice': google_voice.voice_selection_params,
             'audio_config': google_voice.get_audio_config(
                 AudioEncoding.LINEAR16
@@ -462,7 +462,7 @@ class TestMain():
         mock_builtins_open().read.assert_called_once()
         # Google client synthesize_speech
         request = {
-            'input': SynthesisInput(text=text_to_encode),
+            'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
             'voice': google_voice.voice_selection_params,
             'audio_config': google_voice.get_audio_config(
                 AudioEncoding.LINEAR16

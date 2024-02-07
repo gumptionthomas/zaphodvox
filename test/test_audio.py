@@ -22,14 +22,14 @@ class TestConcat():
         concat_files(audio_path, manifest, 'wav', output_filepath)
 
         # Verify
-        mock_progress_bar.assert_called_once_with(
-            'Concat', total=len(filenames)+1
-        )
+        print(mock_progress_bar.call_args_list)
+        mock_progress_bar.assert_any_call('Concatinating', total=len(filenames))
         mock_audio_segment_cls.empty.assert_called_once()
         expected_calls = [
             call(str(audio_path / f), format='wav') for f in filenames
         ]
         mock_audio_segment_cls.from_file.assert_has_calls(expected_calls)
+        mock_progress_bar.assert_any_call('Exporting', total=None)
         mock_audio_segment.export.assert_called_once_with(
             str(output_filepath), format='wav'
         )

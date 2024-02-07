@@ -68,17 +68,15 @@ def parse_text(
                 fragment = fragments[-1]
                 if len(fragment.text) + 1 + len(line) <= max_chars:
                     if line_voice == fragment.voice:
-                        fragment.text += '\n' + line
+                        fragment.text = '\n'.join([fragment.text, line])
                         continue
-                if fragment.text:
-                    fragment.text += '\n'
-                if fragment.text.endswith('\n\n'):
-                    fragments.append(Fragment(text=''))
-            fragments.append(Fragment(
+                fragment.text += '\n'
+            fragment = Fragment(
                 text=line,
                 voice=line_voice if line else None,
                 voice_name=line_voice_name if line else None
-            ))
+            )
+            fragments.append(fragment)
         return fragments
 
 

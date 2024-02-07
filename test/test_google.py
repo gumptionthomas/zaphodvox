@@ -50,7 +50,9 @@ class TestGoogleEncoder():
         )
         mock_google.client.synthesize_speech.assert_called_once_with(
             request={
-                'input': SynthesisInput(text=text_to_encode),
+                'input': SynthesisInput(
+                    ssml=f'<speak>{text_to_encode}</speak>'
+                ),
                 'voice': VoiceSelectionParams(
                     language_code=f'{voice.language}-{voice.region}',
                     name=(

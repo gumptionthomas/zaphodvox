@@ -66,15 +66,14 @@ class TestTextParser():
         )
 
         # Verify
-        assert len(text_fragments) == 4
+        print(text_fragments)
+        assert len(text_fragments) == 3
         assert text_fragments[0].text == 'Paragraph 1\n'
         assert text_fragments[0].voice == voice
         assert text_fragments[1].text == 'Paragraph 2\n\nParagraph 3\n\n'
         assert text_fragments[1].voice == parsed_voice
-        assert text_fragments[2].text == ''
-        assert text_fragments[2].voice is None
-        assert text_fragments[3].text == 'Paragraph 4'
-        assert text_fragments[3].voice == parsed_voice
+        assert text_fragments[2].text == 'Paragraph 4'
+        assert text_fragments[2].voice == parsed_voice
 
     def test_encode_no_voice(self, *args):
         with pytest.raises(ValueError):

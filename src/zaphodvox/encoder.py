@@ -1,8 +1,9 @@
+import re
 from abc import ABC, abstractmethod
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from zaphodvox.audio import create_silence
 from zaphodvox.manifest import Manifest
@@ -88,15 +89,20 @@ class Encoder(ABC):
         voices = voices or {}
         indexes = indexes or list(range(len(manifest.fragments)))
         fragments = [manifest.fragments[i] for i in indexes]
+        for fragment in fragments:
+            duration = fragment.silence_duration
+            if silence_duration is not None:
+                duration = silence_duration
+            if duration:
+                fragment.text = re.sub(
+                    r'(\n{2,})', break_tag_func(duration), fragment.text
+                )
         total_chars = sum([len(s.text) for s in fragments])
-        with ProgressBar('Encode', total=total_chars) as bar:
+        with ProgressBar('Encoding', total=total_chars) as bar:
             for fragment in fragments:
                 if fragment.filename is not None:
                     filepath = encode_dir / fragment.filename
                     filepath = filepath.with_suffix(f'.{self.file_extension}')
-                    duration = fragment.silence_duration
-                    if silence_duration is not None:
-                        duration = silence_duration
                     if (num_chars := len(fragment.text)) > 0:
                         named_voice = None
                         if fragment.voice_name:
@@ -114,3 +120,29 @@ class Encoder(ABC):
                     fragment.encoder = self.name
                     fragment.audio_format = self.audio_format
         return manifest
+
+
+def break_tag_func(duration: int) -> Callable[[re.Match], str]:
+    """Create a function to replace multiple newlines with a break tag.
+
+    Args:
+        duration: The duration of the break in milliseconds.
+
+    Returns:
+        A function that takes a `re.Match` object and returns a string.
+    """
+
+    def break_tag(match: re.Match) -> str:
+        """Replace multiple newlines with a break tag.
+
+        Args:
+            match: The `re.Match` object.
+
+        Returns:
+            The break tag string.
+        """
+        breaks = len(match.group(1)) - 1
+        seconds = min(3.0, (breaks * duration) / 1000.0)
+        return f'<break time="{seconds:.3f}s"/>\n'
+
+    return break_tag
