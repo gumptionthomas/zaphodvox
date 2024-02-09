@@ -85,6 +85,10 @@ class Encoder(ABC):
             indexes: The list of indexes of the `SpeechAudioFile` objects
                 to encode. Defaults to `None` which indicates all objects.
             voices: A dictionary of name/`Voice` pairs.
+            silence_duration: The duration of silence in milliseconds.
+
+        Returns:
+            The `Manifest` with the encoded fragments info.
         """
         voices = voices or {}
         indexes = indexes or list(range(len(manifest.fragments)))
@@ -95,7 +99,7 @@ class Encoder(ABC):
                 duration = silence_duration
             if duration:
                 fragment.text = re.sub(
-                    r'(\n{2,})', break_tag_func(duration), fragment.text
+                    r'(\n{2,})', break_tag(duration), fragment.text
                 )
         total_chars = sum([len(s.text) for s in fragments])
         with ProgressBar('Encoding', total=total_chars) as bar:
@@ -104,14 +108,11 @@ class Encoder(ABC):
                     filepath = encode_dir / fragment.filename
                     filepath = filepath.with_suffix(f'.{self.file_extension}')
                     if (num_chars := len(fragment.text)) > 0:
-                        named_voice = None
-                        if fragment.voice_name:
-                            named_voice = voices.get(fragment.voice_name)
-                        voice = fragment.voice or named_voice
-                        if voice is None:
+                        if (not fragment.voice) and fragment.voice_name:
+                            fragment.voice = voices.get(fragment.voice_name)
+                        if fragment.voice is None:
                             raise ValueError('No voice specified.')
-                        self.t2s(fragment.text, voice, filepath)
-                        fragment.voice = voice
+                        self.t2s(fragment.text, fragment.voice, filepath)
                         bar.next(n=num_chars)
                     elif duration:
                         create_silence(duration, filepath, self.file_extension)
@@ -122,7 +123,7 @@ class Encoder(ABC):
         return manifest
 
 
-def break_tag_func(duration: int) -> Callable[[re.Match], str]:
+def break_tag(duration: int) -> Callable[[re.Match], str]:
     """Create a function to replace multiple newlines with a break tag.
 
     Args:
@@ -132,7 +133,7 @@ def break_tag_func(duration: int) -> Callable[[re.Match], str]:
         A function that takes a `re.Match` object and returns a string.
     """
 
-    def break_tag(match: re.Match) -> str:
+    def _break_tag(match: re.Match) -> str:
         """Replace multiple newlines with a break tag.
 
         Args:
@@ -143,6 +144,6 @@ def break_tag_func(duration: int) -> Callable[[re.Match], str]:
         """
         breaks = len(match.group(1)) - 1
         seconds = min(3.0, (breaks * duration) / 1000.0)
-        return f'<break time="{seconds:.3f}s"/>\n'
+        return f'\n <break time="{seconds:.3f}s" /> '
 
-    return break_tag
+    return _break_tag

@@ -113,7 +113,7 @@ class TestEncoder():
         mock_audio_segment_cls.silent.assert_not_called()
         request = {
             'input': SynthesisInput(
-                ssml='<speak>Paragraph 1<break time=\"0.100s\"/>\n'
+                ssml='<speak>Paragraph 1\n <break time=\"0.100s\" /> '
                 'Paragraph 2\n</speak>'
             ),
             'voice': voice.voice_selection_params,
@@ -141,6 +141,6 @@ class TestEncoder():
         mock_progress_bar.assert_called_once_with(
             'Encoding', total=(
                 sum(len(t) for t in full_text.split('\n')) +
-                len('<break time=\"0.100s\"/>') + 2 # newlines
+                len('\n <break time=\"0.100s\"/> ') + 2 # newlines
             )
         )
