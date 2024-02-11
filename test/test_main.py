@@ -393,6 +393,7 @@ class TestMain():
         sys_args = [
             '--encoder=google',
             '--voice-id=A',
+            '--voice-region=UK',
             '--encode',
             '--concat',
             '--copy',
@@ -442,6 +443,7 @@ class TestMain():
         sys_args = [
             '--encoder=google',
             '--voice-id=A',
+            '--voice-region=UK',
             '--encode',
             '--concat',
             '--copy',
@@ -506,7 +508,7 @@ class TestMain():
         # Verify
         assert se.value.code == 0
         out, _ = capfd.readouterr()
-        assert 'version 1.2.0' in out
+        assert 'version 1.3.0' in out
 
     def test_nothing_to_do(self, mock_builtins_open, capfd):
         # Setup

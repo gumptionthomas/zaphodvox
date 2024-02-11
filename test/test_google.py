@@ -10,7 +10,6 @@ from google.cloud.texttospeech import (
 
 from zaphodvox.elevenlabs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.encoder import GoogleEncoder
-from zaphodvox.googlecloud.voice import GoogleVoice
 from zaphodvox.parser import parse_args
 
 
@@ -27,20 +26,18 @@ class TestGoogleVoice():
 
 
 class TestGoogleEncoder():
-    def test_t2s(self, text_to_encode, mock_builtins_open, mock_google):
+    def test_t2s(self, google_voice, text_to_encode, mock_builtins_open, mock_google):
         # Setup
         google_encoder = GoogleEncoder()
-        voice = GoogleVoice(
-            voice_id='A', language='en',
-            region='US', type='Wavenet',
-            speaking_rate=1.0, pitch=0.0, volume_gain_db=1.0,
-            sample_rate_hertz=16000,
-            effects_profile_id=['headphone-class-device']
-        )
+        google_voice.speaking_rate = 1.0
+        google_voice.pitch = 0.0
+        google_voice.volume_gain_db = 1.0
+        google_voice.sample_rate_hertz = 16000
+        google_voice.effects_profile_id = ['headphone-class-device']
         filepath = Path('/path/to/output.wav')
 
         # Run
-        google_encoder.t2s(text_to_encode, voice, filepath)
+        google_encoder.t2s(text_to_encode, google_voice, filepath)
 
         # Verify
         mock_google.client_cls.assert_called_once_with()
@@ -48,28 +45,24 @@ class TestGoogleEncoder():
         mock_builtins_open().write.assert_called_once_with(
             mock_google.audio_content
         )
-        mock_google.client.synthesize_speech.assert_called_once_with(
-            request={
-                'input': SynthesisInput(
-                    ssml=f'<speak>{text_to_encode}</speak>'
-                ),
-                'voice': VoiceSelectionParams(
-                    language_code=f'{voice.language}-{voice.region}',
-                    name=(
-                        f'{voice.language}-{voice.region}-'
-                        f'{voice.type}-{voice.voice_id}'
-                    )
-                ),
-                'audio_config': AudioConfig(
-                    audio_encoding=AudioEncoding.LINEAR16,
-                    speaking_rate=voice.speaking_rate,
-                    pitch=voice.pitch,
-                    volume_gain_db=voice.volume_gain_db,
-                    sample_rate_hertz=voice.sample_rate_hertz,
-                    effects_profile_id=voice.effects_profile_id
+        mock_google.client.synthesize_speech.assert_called_once_with(request={
+            'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
+            'voice': VoiceSelectionParams(
+                language_code=f'{google_voice.language}-{google_voice.region}',
+                name=(
+                    f'{google_voice.language}-{google_voice.region}-'
+                    f'{google_voice.type}-{google_voice.voice_id}'
                 )
-            }
-        )
+            ),
+            'audio_config': AudioConfig(
+                audio_encoding=AudioEncoding.LINEAR16,
+                speaking_rate=google_voice.speaking_rate,
+                pitch=google_voice.pitch,
+                volume_gain_db=google_voice.volume_gain_db,
+                sample_rate_hertz=google_voice.sample_rate_hertz,
+                effects_profile_id=google_voice.effects_profile_id
+            )
+        })
 
     def test_from_args(self, mock_google):
         # Setup

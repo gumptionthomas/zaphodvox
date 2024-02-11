@@ -3,6 +3,7 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
+
 from zaphodvox.parser import parse_args
 
 

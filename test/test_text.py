@@ -1,5 +1,5 @@
 import pytest
-from zaphodvox.googlecloud.voice import GoogleVoice
+
 from zaphodvox.text import clean_text, parse_text
 
 
@@ -20,61 +20,51 @@ class TestCleanText():
 
 
 class TestTextParser():
-    def test_parse(self):
+    def test_parse(self, google_voice, google_voice_2):
         # Setup
         full_text = (
-            "Paragraph 1\nZVOX: Joe\nParagraph 2\n"
-            "ZVOX: Josh\nParagraph 3"
-        )
-        voice = GoogleVoice(
-            voice_id='A', language='en', region='UK', type='Wavenet'
-        )
-        parsed_voice = GoogleVoice(
-            voice_id='B', language='en', region='US', type='Wavenet'
+            "Paragraph 1\nZVOX: Trillian\nParagraph 2\n"
+            "ZVOX: Marvin\nParagraph 3"
         )
 
         # Run
         text_fragments = parse_text(
-            full_text, voice=voice, voices={'Joe': parsed_voice}
+            full_text, voice=google_voice, voices={'Trillian': google_voice_2}
         )
 
         # Verify
         assert len(text_fragments) == 3
         assert text_fragments[0].text == 'Paragraph 1'
-        assert text_fragments[0].voice == voice
+        assert text_fragments[0].voice == google_voice
         assert text_fragments[1].text == 'Paragraph 2'
-        assert text_fragments[1].voice == parsed_voice
+        assert text_fragments[1].voice == google_voice_2
         assert text_fragments[2].text == 'Paragraph 3'
-        assert text_fragments[2].voice == parsed_voice
+        assert text_fragments[2].voice == google_voice_2
 
-    def test_parse_max_chars(self):
+    def test_parse_max_chars(self, google_voice, google_voice_2):
         # Setup
         full_text = (
-            "Paragraph 1\nZVOX: Joe\nParagraph 2\n\n"
-            "ZVOX: Josh\nParagraph 3\n\nParagraph 4"
-        )
-        voice = GoogleVoice(
-            voice_id='A', language='en', region='UK', type='Wavenet'
-        )
-        parsed_voice = GoogleVoice(
-            voice_id='B', language='en', region='US', type='Wavenet'
+            "Paragraph 1\nZVOX: Trillian\nParagraph 2\n\n"
+            "ZVOX: Marvin\nParagraph 3\n\nParagraph 4"
         )
 
         # Run
         text_fragments = parse_text(
-            full_text, voice=voice, voices={'Joe': parsed_voice}, max_chars=30
+            full_text,
+            voice=google_voice,
+            voices={'Trillian': google_voice_2},
+            max_chars=30
         )
 
         # Verify
-        print(text_fragments)
         assert len(text_fragments) == 3
         assert text_fragments[0].text == 'Paragraph 1\n'
-        assert text_fragments[0].voice == voice
+        assert text_fragments[0].voice == google_voice
         assert text_fragments[1].text == 'Paragraph 2\n\nParagraph 3\n\n'
-        assert text_fragments[1].voice == parsed_voice
+        assert text_fragments[1].voice == google_voice_2
         assert text_fragments[2].text == 'Paragraph 4'
-        assert text_fragments[2].voice == parsed_voice
+        assert text_fragments[2].voice == google_voice_2
 
-    def test_encode_no_voice(self, *args):
+    def test_encode_no_voice(self):
         with pytest.raises(ValueError):
             parse_text("Paragraph 1", voice=None)

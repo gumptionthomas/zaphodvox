@@ -4,6 +4,7 @@ from typing import Iterator
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
+from google.cloud.texttospeech import AudioEncoding
 
 from zaphodvox.elevenlabs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.voice import GoogleVoice
@@ -15,11 +16,26 @@ def text_to_encode() -> str:
 
 
 @pytest.fixture
+def audio_encoding() -> int:
+    return AudioEncoding.LINEAR16
+
+
+@pytest.fixture
 def google_voice() -> GoogleVoice:
     return GoogleVoice(
         voice_id='A',
         language='en',
-        region='US',
+        region='UK',
+        type='Wavenet'
+    )
+
+
+@pytest.fixture
+def google_voice_2() -> GoogleVoice:
+    return GoogleVoice(
+        voice_id='C',
+        language='en',
+        region='UK',
         type='Wavenet'
     )
 
@@ -30,14 +46,23 @@ def elevenlabs_voice() -> ElevenLabsVoice:
 
 
 @pytest.fixture
-def voices_data(google_voice, elevenlabs_voice) -> dict:
+def elevenlabs_voice_2() -> ElevenLabsVoice:
+    return ElevenLabsVoice(voice_id='Trillian')
+
+
+@pytest.fixture
+def voices_data(
+    google_voice, elevenlabs_voice, elevenlabs_voice_2
+) -> dict:
     return {
         'voices': {
             'voice_1': {
                 'google': google_voice.model_dump(),
                 'elevenlabs': elevenlabs_voice.model_dump()
             },
-            'voice_2': {'elevenlabs': {'voice_id': 'Arthur'}}
+            'voice_2': {
+                'elevenlabs': elevenlabs_voice_2.model_dump()
+            }
         }
     }
 
@@ -95,7 +120,7 @@ def no_voice_manifest_json_data() -> str:
 
 
 @pytest.fixture
-def incorrect_voice_manifest_json_data() -> str:
+def incorrect_voice_manifest_json_data(elevenlabs_voice) -> str:
     return json.dumps({
         'fragments': [{
                 'text': 'Text 0',
@@ -106,7 +131,7 @@ def incorrect_voice_manifest_json_data() -> str:
                 'audio_format': 'linear16',
                 'silence_duration': None
         }],
-        'voices': {'voice_1': {'elevenlabs': {'voice_id': 'Ford'}}}
+        'voices': {'voice_1': {'elevenlabs': elevenlabs_voice.model_dump()}}
     })
 
 

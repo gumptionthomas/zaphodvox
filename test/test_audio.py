@@ -10,25 +10,26 @@ class TestConcat():
     def test_concat(self, mock_progress_bar, mock_audio):
         # Setup
         audio_path = Path('/path/to/audio')
-        filenames = [f'audio-file-0000{i}.wav' for i in range(3)]
+        filenames = [f'audio-file-{i:05d}.wav' for i in range(3)]
         output_filepath = Path('/path/to/output.wav')
-        fragments = [
+        manifest = Manifest(fragments=[
             Fragment(filename=f, text=str(f)) for f in filenames
-        ]
-        manifest = Manifest(fragments=fragments)
+        ])
         mock_audio_segment_cls, mock_audio_segment = mock_audio
 
         # Run
         concat_files(audio_path, manifest, 'wav', output_filepath)
 
         # Verify
-        print(mock_progress_bar.call_args_list)
-        mock_progress_bar.assert_any_call('Concatinating', total=len(filenames))
+        assert mock_progress_bar.call_count == 2
+        mock_progress_bar.assert_any_call(
+            'Concatinating', total=len(filenames)
+        )
         mock_audio_segment_cls.empty.assert_called_once()
-        expected_calls = [
+        assert mock_audio_segment_cls.from_file.call_count == len(filenames)
+        mock_audio_segment_cls.from_file.assert_has_calls([
             call(str(audio_path / f), format='wav') for f in filenames
-        ]
-        mock_audio_segment_cls.from_file.assert_has_calls(expected_calls)
+        ])
         mock_progress_bar.assert_any_call('Exporting', total=None)
         mock_audio_segment.export.assert_called_once_with(
             str(output_filepath), format='wav'
