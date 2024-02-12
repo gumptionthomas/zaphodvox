@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from zaphodvox.parser import parse_args
+from zaphodvox.arg_parser import parse_args
 
 
 class TestArgParser():

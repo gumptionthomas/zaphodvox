@@ -17,43 +17,6 @@ def parse_args(args: list) -> Namespace:
         The parsed command-line arguments.
     """
 
-    class ScalarAction(Action):
-        """Custom action class for handling scalar values.
-
-        This class validates that the provided value is within the range of
-        0.0 to 1.0. If the value is outside this range, it raises an error.
-
-        Args:
-            parser: The argument parser object.
-            namespace: The namespace object.
-            values: The value(s) provided for
-                the action.
-            option_string: The option string associated with
-                the action.
-
-        Raises:
-            ArgumentTypeError: If the value is outside the range of 0.0 to 1.0.
-        """
-        def __call__(
-            self, parser: ArgumentParser, namespace: Namespace,
-            values: Optional[str | Sequence[Any]],
-            option_string: Optional[str] = None
-        ) -> None:
-            """Validates that the provided value is within the range of
-            0.0 to 1.0.
-
-            Args:
-                parser: The argument parser object.
-                namespace: The namespace object.
-                values The value(s) provided for the action.
-                option_string: The option string associated with the action.
-            """
-            if values is not None and float(str(values)) < 0.0:
-                parser.error(f'Minimum value for {option_string} is 0.0')
-            if values is not None and float(str(values)) > 1.0:
-                parser.error(f'Maximum value for {option_string} is 1.0')
-            setattr(namespace, self.dest, values)
-
     def list_of_ints(arg):
         """Converts a comma-delimited string of integers to a
         list of integers.
@@ -368,3 +331,41 @@ def parse_args(args: list) -> Namespace:
         help='The API key to use for ElevenLabs auth'
     )
     return parser.parse_args(args)
+
+
+class ScalarAction(Action):
+    """Custom action class for handling scalar values.
+
+    This class validates that the provided value is within the range of
+    0.0 to 1.0. If the value is outside this range, it raises an error.
+
+    Args:
+        parser: The argument parser object.
+        namespace: The namespace object.
+        values: The value(s) provided for
+            the action.
+        option_string: The option string associated with
+            the action.
+
+    Raises:
+        ArgumentTypeError: If the value is outside the range of 0.0 to 1.0.
+    """
+    def __call__(
+        self, parser: ArgumentParser, namespace: Namespace,
+        values: Optional[str | Sequence[Any]],
+        option_string: Optional[str] = None
+    ) -> None:
+        """Validates that the provided value is within the range of
+        0.0 to 1.0.
+
+        Args:
+            parser: The argument parser object.
+            namespace: The namespace object.
+            values The value(s) provided for the action.
+            option_string: The option string associated with the action.
+        """
+        if values is not None and float(str(values)) < 0.0:
+            parser.error(f'Minimum value for {option_string} is 0.0')
+        if values is not None and float(str(values)) > 1.0:
+            parser.error(f'Maximum value for {option_string} is 1.0')
+        setattr(namespace, self.dest, values)

@@ -5,7 +5,7 @@ import pytest
 from google.cloud.texttospeech import AudioEncoding, SynthesisInput
 
 from zaphodvox.main import main
-from zaphodvox.parser import parse_args
+from zaphodvox.arg_parser import parse_args
 
 
 class TestMain():

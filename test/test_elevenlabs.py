@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from zaphodvox.elevenlabs.encoder import ElevenLabsEncoder
-from zaphodvox.parser import parse_args
+from zaphodvox.arg_parser import parse_args
 
 
 class TestElevenLabsVoice():

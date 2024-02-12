@@ -10,7 +10,7 @@ from google.cloud.texttospeech import (
 
 from zaphodvox.elevenlabs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.encoder import GoogleEncoder
-from zaphodvox.parser import parse_args
+from zaphodvox.arg_parser import parse_args
 
 
 class TestGoogleVoice():

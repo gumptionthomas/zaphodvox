@@ -107,10 +107,10 @@ def manifest_json_data(voices_data, fragments_data) -> str:
 
 
 @pytest.fixture
-def no_voice_manifest_json_data() -> str:
+def no_voice_manifest_json_data(text_to_encode) -> str:
     return json.dumps({
     'fragments': [{
-            'text': 'Text 0',
+            'text': text_to_encode,
             'filename': 'test-00000.wav',
             'encoder': 'google',
             'audio_format': 'linear16',
@@ -120,12 +120,14 @@ def no_voice_manifest_json_data() -> str:
 
 
 @pytest.fixture
-def incorrect_voice_manifest_json_data(elevenlabs_voice) -> str:
+def incorrect_voice_manifest_json_data(
+    elevenlabs_voice, elevenlabs_voice_2, text_to_encode
+) -> str:
     return json.dumps({
         'fragments': [{
-                'text': 'Text 0',
+                'text': text_to_encode,
                 'filename': 'test-00000.wav',
-                'voice': {'voice_id': 'Ford'},
+                'voice': elevenlabs_voice_2.model_dump(),
                 'voice_name': 'voice_1',
                 'encoder': 'google',
                 'audio_format': 'linear16',

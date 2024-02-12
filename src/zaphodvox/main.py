@@ -11,7 +11,7 @@ from zaphodvox.audio import concat_files, copy_files
 from zaphodvox.encoder import Encoder
 from zaphodvox.manifest import Manifest
 from zaphodvox.named_voices import NamedVoices
-from zaphodvox.parser import parse_args
+from zaphodvox.arg_parser import parse_args
 from zaphodvox.text import clean_text, parse_text
 from zaphodvox.voice import Voice
 
