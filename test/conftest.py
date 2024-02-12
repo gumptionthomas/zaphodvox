@@ -188,9 +188,8 @@ def mock_google() -> Iterator[MockGoogle]:
     ) as client_cls:
         client = client_cls.return_value
         client_cls.from_service_account_file.return_value = client
-        client.return_value.synthesize_speech.return_value.audio_content = \
-            b'audio'
         mock_response = client.synthesize_speech.return_value
+        mock_response.audio_content = b'audio'
         yield MockGoogle(client_cls, client, mock_response.audio_content)
 
 
@@ -207,8 +206,6 @@ def mock_elevenlabs() -> Iterator[MockElevenlabs]:
         patch('zaphodvox.elevenlabs.encoder.save') as save,
         patch('zaphodvox.elevenlabs.encoder.generate') as generate,
         patch('zaphodvox.elevenlabs.encoder.ELVoice') as elvoice,
-        patch(
-            'zaphodvox.elevenlabs.voice.VoiceSettings.from_voice_id'
-        ) as from_voice_id
+        patch('zaphodvox.elevenlabs.voice.VoiceSettings.from_voice_id') as fvid
     ):
-        yield MockElevenlabs(history, save, generate, elvoice, from_voice_id)
+        yield MockElevenlabs(history, save, generate, elvoice, fvid)

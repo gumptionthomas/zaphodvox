@@ -26,7 +26,10 @@ class TestGoogleVoice():
 
 
 class TestGoogleEncoder():
-    def test_t2s(self, google_voice, text_to_encode, mock_builtins_open, mock_google):
+    def test_t2s(
+            self, google_voice, text_to_encode, mock_builtins_open,
+            mock_google
+    ):
         # Setup
         google_encoder = GoogleEncoder()
         google_voice.speaking_rate = 1.0
