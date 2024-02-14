@@ -20,7 +20,7 @@ $ pip uninstall zaphodvox
 Successfully uninstalled zaphodvox...
 ```
 
-`zaphodvox` also requires a working installation of [ffmpeg](https://ffmpeg.org/).
+`zaphodvox` also requires a current installation of [ffmpeg](https://ffmpeg.org/).
 
 # Authorization
 
@@ -63,7 +63,7 @@ between lines. Ideally, these parts of the sentence would be on the same line.
 $ zaphodvox --encoder=google --voice-id=A --encode gone-bananas.txt
 ```
 
-Running the above command will encode the text file using the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) with the `en-US-Wavenet-A` voice. This will result in the following fragment audio files being created in the working directory (one file for each line of text):
+Running the above command will encode the text file using the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) with the `en-US-Wavenet-A` voice. This will result in the following fragment audio files being created in the current directory (one file for each line of text):
 
 ```console
 gone-bananas-00000.wav ["This is the first line..."]
@@ -72,7 +72,7 @@ gone-bananas-00002.wav ["This is the last line. And this is..."]
 gone-bananas-00003.wav ["between lines. Ideally, these..."]
 ```
 
-In addition to the audio files, a manifest JSON file (`gone-bananas-manifest.json`) will also be written to the working directory. This file contains information about the fragment audio files encoded, including the text, the relative file name, and the voice used. This manifest file can also be used as input to the command rather than a text file. See the [manifest documentation](#manifest) for more information.
+In addition to the audio files, a manifest JSON file (`gone-bananas-manifest.json`) will also be written to the current directory. This file contains information about the fragment audio files encoded, including the text, the relative file name, and the voice used. This manifest file can also be used as input to the command rather than a text file. See the [manifest documentation](#manifest) for more information.
 
 ## Concatenation
 
@@ -82,7 +82,7 @@ To combine the individual fragment audio files into one, add the `--concat` argu
 $ zaphodvox --encoder=google --voice-id=A --encode --concat gone-bananas.txt
 ```
 
-Now only a single audio file, `gone-bananas.wav`, will be created in the working directory.
+An additional audio file, `gone-bananas.wav`, will be saved in the current directory.
 
 ## Cleaning
 
@@ -118,7 +118,7 @@ $ zaphodvox --encoder=google --voice-id=A --clean --encode --concat gone-bananas
 
 If the `--max-chars` argument is provided, the cleaning process will guarantee that every line is less than `max-chars` characters by splitting long lines at sentence boundaries.
 
-The text file will be cleaned before being encoded and concatenated into `gone-bananas.wav`. The cleaned text file (i.e. `gone-bananas-cleaned.txt`) will still be created in the working directory.
+The text file will be cleaned before being encoded and concatenated into `gone-bananas.wav`. The cleaned text file (i.e. `gone-bananas-cleaned.txt`) will still be created in the current directory.
 
 # Voice Configurations
 
@@ -194,7 +194,7 @@ If a line contains the "ZVOX" tag, it will not be synthesized to speech.
 $ zaphodvox --voices-file=voices.json --encoder=google --encode heart-of-gold.txt
 ```
 
-The above command will result in the following fragment audio files to be created in the working directory:
+The above command will result in the following fragment audio files to be created in the current directory:
 
 ```console
 heart-of-gold-00000.wav ["This text will be spoken by the..." using "Marvin" google voice]
@@ -270,10 +270,10 @@ And always know where it is.
 The file is encoded with this command:
 
 ```bash
-$ zaphodvox --encoder=google --voice-id=A --encode --copy towel.txt
+$ zaphodvox --encoder=google --voice-id=A --encode towel.txt
 ```
 
-Three files will be created in the current working directory: the two fragment audio files (`towel-00000.wav` and `towel-00001.wav`) and the manifest file (`towel-manifest.json`).
+Three files will be created in the current directory: the two fragment audio files (`towel-00000.wav` and `towel-00001.wav`) and the manifest file (`towel-manifest.json`).
 
 Here are the contents of `towel-manifest.json`:
 

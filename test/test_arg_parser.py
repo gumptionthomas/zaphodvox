@@ -14,6 +14,7 @@ class TestArgParser():
         # General
         assert args.inputfile == Path('test.txt')
         assert args.version is False
+        assert args.out_dir is None
         assert args.encoder_name is None
         assert args.voices_file is None
         assert args.voice_name is None
@@ -24,8 +25,6 @@ class TestArgParser():
         assert args.indexes is None
         assert not args.clean
         assert not args.encode
-        assert not args.copy
-        assert args.copy_dir is None
         assert not args.concat
         assert args.concat_out is None
         assert args.save_manifest is True

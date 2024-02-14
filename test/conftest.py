@@ -159,25 +159,6 @@ def mock_audio() -> Iterator[tuple[MagicMock, MagicMock]]:
         yield MockAudio(segment_cls, segment)
 
 
-@pytest.fixture
-def mock_copy() -> Iterator[MagicMock]:
-    with (
-        patch('zaphodvox.audio.shutil.copy') as copy,
-        patch('zaphodvox.audio.Path.exists', return_value=True)
-    ):
-        yield copy
-
-
-MockTempDir = namedtuple('MockTempDir', ['temp_dir_cls', 'path'])
-
-
-@pytest.fixture
-def mock_temp_dir(tmp_path) -> Iterator[MockTempDir]:
-    with patch('zaphodvox.main.TemporaryDirectory') as temp_dir:
-        temp_dir.return_value.__enter__.return_value = str(tmp_path)
-        yield MockTempDir(temp_dir, tmp_path)
-
-
 MockGoogle = namedtuple(
     'MockGoogle', ['client_cls', 'client', 'audio_content']
 )

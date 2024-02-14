@@ -70,8 +70,8 @@ class Encoder(ABC):
         raise NotImplementedError
 
     def encode_manifest(
-        self, manifest: Manifest, encode_dir: Path,
-        indexes: Optional[list[int]]=None,
+        self, manifest: Manifest, encode_dir: Optional[Path] = None,
+        indexes: Optional[list[int]] = None,
         voices: Optional[dict[str, Optional[Voice]]] = None,
         silence_duration: Optional[int] = None
     ) -> Manifest:
@@ -105,7 +105,9 @@ class Encoder(ABC):
         with ProgressBar('Encoding', total=total_chars) as bar:
             for fragment in fragments:
                 if fragment.filename is not None:
-                    filepath = encode_dir / fragment.filename
+                    filepath = Path(fragment.filename)
+                    if encode_dir:
+                        filepath = encode_dir / filepath.name
                     filepath = filepath.with_suffix(f'.{self.file_extension}')
                     if (num_chars := len(fragment.text)) > 0:
                         if (not fragment.voice) and fragment.voice_name:

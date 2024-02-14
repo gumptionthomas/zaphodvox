@@ -1,4 +1,3 @@
-import shutil
 from pathlib import Path
 
 from pydub import AudioSegment
@@ -48,22 +47,3 @@ def concat_files(
     with ProgressBar('Exporting', total=None) as bar:
         segments.export(str(output_filepath), format=format)
         bar.stop()
-
-def copy_files(audio_dir: Path, manifest: Manifest, copy_dir: Path) -> None:
-    """Copies the encoded files from the audio directory to the copy directory.
-
-    Args:
-        audio_dir: The directory `Path` containing the fragment audio files.
-        manifest: The `Manifest` containing the fragment audio files to copy.
-        copy_dir: The `Path` to the directory where the fragment audio files
-            will be copied.
-    """
-    filepaths = [
-        audio_dir / fragment.filename
-        for fragment in manifest.fragments if fragment.filename
-    ]
-    with ProgressBar('Copy', total=len(filepaths)) as bar:
-        for filepath in filepaths:
-            if filepath.exists():
-                shutil.copy(str(filepath), str(copy_dir))
-            bar.next()

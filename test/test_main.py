@@ -11,8 +11,7 @@ from zaphodvox.arg_parser import parse_args
 class TestMain():
     def test_main(
         self, text_to_encode, google_voice, mock_builtins_open,
-        voices_json_data, mock_audio, mock_copy, mock_temp_dir,
-        mock_google
+        voices_json_data, mock_audio, mock_google, tmp_path
     ):
         # Setup
         sys_args = [
@@ -20,8 +19,9 @@ class TestMain():
             '--voice-name=voice_1',
             '--voices-file=voices.json',
             '--encode',
+            f'--out-dir={str(tmp_path)}',
             '--concat',
-            '--copy',
+            '--concat-out=.',
             'test.txt'
         ]
         mock_builtins_open.side_effect = (
@@ -55,31 +55,28 @@ class TestMain():
         )
         # Fragment file
         mock_builtins_open.assert_any_call(
-            str(mock_temp_dir.path / 'test-00000.wav'), 'wb'
+            str(tmp_path / 'test-00000.wav'), 'wb'
         )
         mock_write.assert_any_call(mock_google.audio_content)
         mock_audio.segment_cls.silence.assert_not_called()
         # Concat file
         mock_audio.segment_cls.empty.assert_called_once()
         mock_audio.segment_cls.from_file.assert_called_once_with(
-            str(mock_temp_dir.path / 'test-00000.wav'), format='wav'
+            str(tmp_path / 'test-00000.wav'), format='wav'
         )
         mock_audio.segment.export.assert_called_once_with(
-            str(Path.cwd() / 'test.wav'), format='wav'
+            'test.wav', format='wav'
         )
         # Manifest file
         mock_builtins_open.assert_any_call(
-            str(Path.cwd() / 'test-manifest.json'), 'w'
+            str(tmp_path / 'test-manifest.json'), 'w'
         )
         assert mock_write.call_count == 2
-        # Copy
-        mock_copy.assert_called_once_with(
-            str(mock_temp_dir.path / 'test-00000.wav'), str(Path.cwd())
-        )
+        assert mock_builtins_open.call_count == 4
 
     def test_main_manifest(
         self, google_voice, mock_builtins_open, manifest_json_data,
-        mock_audio, mock_copy, mock_google, mock_temp_dir
+        mock_audio, mock_google
     ):
         # Setup
         sys_args = [
@@ -87,9 +84,7 @@ class TestMain():
             '--basename=test',
             '--encode',
             '--concat',
-            '--concat-out=.',
             '--indexes=0, 2,4 ',
-            '--copy',
             'test-manifest.json'
         ]
         mock_builtins_open.side_effect = (
@@ -109,7 +104,6 @@ class TestMain():
         # Input file
         mock_builtins_open.assert_any_call('test-manifest.json', 'r')
         # Google client synthesize_speech
-        mock_temp_dir.temp_dir_cls.assert_called_once_with()
         assert mock_google.client.synthesize_speech.call_count == 2
         # Fragment #0
         request = {
@@ -141,12 +135,10 @@ class TestMain():
         # Manifest file
         mock_builtins_open.assert_any_call('test-manifest.json', 'w')
         assert mock_write.call_count == 3
-        # Copy not called
-        mock_copy.assert_not_called()
 
     def test_main_manifest_different_encoder(
         self, voices_json_data, manifest_json_data, elevenlabs_voice,
-        mock_builtins_open, mock_elevenlabs, mock_audio, mock_copy
+        mock_builtins_open, mock_elevenlabs, mock_audio
     ):
         # Setup
         sys_args = [
@@ -156,7 +148,6 @@ class TestMain():
             '--encode',
             '--concat',
             '--indexes=0, 2, 4',
-            '--copy',
             'test-manifest.json'
         ]
         mock_builtins_open.side_effect = (
@@ -233,12 +224,10 @@ class TestMain():
         # Manifest file
         mock_builtins_open.assert_any_call('test-manifest.json', 'w')
         assert mock_write.call_count == 1
-        # Copy not called
-        mock_copy.assert_not_called()
 
     def test_main_manifest_no_voice(
         self, mock_builtins_open, no_voice_manifest_json_data, mock_audio,
-        mock_google, mock_copy, capfd
+        mock_google, capfd
     ):
         # Setup
         sys_args = [
@@ -246,7 +235,6 @@ class TestMain():
             '--basename=test',
             '--encode',
             '--concat',
-            '--copy',
             'test-manifest.json'
         ]
         mock_builtins_open.return_value = mock_open(
@@ -273,8 +261,6 @@ class TestMain():
         mock_audio.segment.export.assert_not_called()
         # Manifest file not called
         assert mock_builtins_open.call_count == 1
-        # Copy not called
-        mock_copy.assert_not_called()
         # System exit
         assert se.value.code == 1
         out, _ = capfd.readouterr()
@@ -282,7 +268,7 @@ class TestMain():
 
     def test_main_manifest_incorrect_voice(
         self, mock_builtins_open, incorrect_voice_manifest_json_data,
-        mock_audio, mock_google, mock_copy, capfd
+        mock_audio, mock_google, capfd
     ):
         # Setup
         sys_args = [
@@ -290,7 +276,6 @@ class TestMain():
             '--basename=test',
             '--encode',
             '--concat',
-            '--copy',
             'test-manifest.json'
         ]
         mock_builtins_open.return_value = mock_open(
@@ -315,8 +300,6 @@ class TestMain():
         mock_audio.segment.export.assert_not_called()
         # Manifest file not called
         assert mock_builtins_open.call_count == 1
-        # Copy not called
-        mock_copy.assert_not_called()
         # System exit
         assert se.value.code == 1
         out, _ = capfd.readouterr()
@@ -324,7 +307,7 @@ class TestMain():
 
     def test_main_elevenlabs(
         self, text_to_encode, elevenlabs_voice, mock_builtins_open,
-        mock_temp_dir, mock_elevenlabs, mock_copy, mock_audio
+        mock_elevenlabs, mock_audio
     ):
         # Setup
         voice_id = elevenlabs_voice.voice_id
@@ -333,7 +316,6 @@ class TestMain():
             f'--voice-id={voice_id}',
             '--encode',
             '--concat',
-            '--copy',
             '--delete-history',
             'test.txt'
         ]
@@ -359,34 +341,29 @@ class TestMain():
             model='eleven_multilingual_v2'
         )
         mock_elevenlabs.save.assert_called_once_with(
-            mock_elevenlabs.generate.return_value,
-            str(mock_temp_dir.path / 'test-00000.mp3')
+            mock_elevenlabs.generate.return_value, 'test-00000.mp3'
         )
         # No silence
         mock_audio.segment_cls.silent.assert_not_called()
         # Concat files
         mock_audio.segment_cls.empty.assert_called_once()
         mock_audio.segment_cls.from_file.assert_called_once_with(
-            str(mock_temp_dir.path / 'test-00000.mp3'), format='mp3'
+            'test-00000.mp3', format='mp3'
         )
         mock_audio.segment.export.assert_called_once_with(
-            str(Path.cwd() / 'test.mp3'), format='mp3'
+            'test.mp3', format='mp3'
         )
         # Manifest file
         mock_builtins_open.assert_any_call(
-            str(Path.cwd() / 'test-manifest.json'), 'w'
+            'test-manifest.json', 'w'
         )
         assert mock_write.call_count == 1
-        # Copy files
-        mock_copy.assert_called_once_with(
-            str(mock_temp_dir.path / 'test-00000.mp3'), str(Path.cwd())
-        )
         # Delete history
         mock_elevenlabs.history.from_api.assert_called_once_with()
 
     def test_main_encode_exception(
         self, text_to_encode, google_voice, mock_builtins_open, mock_audio,
-        mock_google, mock_temp_dir, capfd
+        mock_google, capfd
     ):
         error = 'encode exception'
         # Setup
@@ -396,7 +373,6 @@ class TestMain():
             '--voice-region=UK',
             '--encode',
             '--concat',
-            '--copy',
             'test.txt'
         ]
         mock_google.client.synthesize_speech.side_effect = Exception(error)
@@ -412,7 +388,6 @@ class TestMain():
         mock_builtins_open.assert_any_call(str(Path('test.txt')), 'r')
         mock_builtins_open().read.assert_called_once()
         # Google client synthesize_speech
-        mock_temp_dir.temp_dir_cls.assert_called_once_with()
         request = {
             'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
             'voice': google_voice.voice_selection_params,
@@ -436,7 +411,7 @@ class TestMain():
 
     def test_main_concat_exception(
         self, text_to_encode, google_voice, mock_builtins_open,
-        mock_google, mock_audio, mock_copy, mock_temp_dir, capfd
+        mock_google, mock_audio, capfd
     ):
         # Setup
         error  = 'from_file error'
@@ -446,7 +421,6 @@ class TestMain():
             '--voice-region=UK',
             '--encode',
             '--concat',
-            '--copy',
             'test.txt'
         ]
         mock_write = mock_builtins_open.return_value.write
@@ -474,8 +448,7 @@ class TestMain():
             request=request
         )
         # Fragment file
-        mock_builtins_open.assert_any_call(
-            str(mock_temp_dir.path / 'test-00000.wav'), 'wb'
+        mock_builtins_open.assert_any_call('test-00000.wav', 'wb'
         )
         mock_write.assert_any_call(mock_google.audio_content)
         # No silence
@@ -484,14 +457,8 @@ class TestMain():
         mock_audio.segment_cls.empty.assert_called_once()
         mock_audio.segment.export.assert_not_called()
         # Manifest file
-        mock_builtins_open.assert_any_call(
-            str(Path.cwd() / 'test-manifest.json'), 'w'
-        )
+        mock_builtins_open.assert_any_call('test-manifest.json', 'w')
         assert mock_write.call_count == 2
-        # Copy
-        mock_copy.assert_called_once_with(
-            str(mock_temp_dir.path / 'test-00000.wav'), str(Path.cwd())
-        )
         # System exit
         assert se.value.code == 1
         out, _ = capfd.readouterr()

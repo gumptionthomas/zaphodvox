@@ -49,6 +49,16 @@ def parse_args(args: list) -> Namespace:
         help='Print the version number and exit'
     )
     parser.add_argument(
+        '-o',
+        '--out-dir',
+        type=Path,
+        default=None,
+        help=(
+            'The directory in which to save all files '
+            '(default: the current directory)'
+        )
+    )
+    parser.add_argument(
         '-e',
         '--encoder-name',
         choices=[e.name for e in Encoder.__subclasses__()],
@@ -119,7 +129,7 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help=(
             'The clean text output file '
-            '(default: [parent directory of inputfile]/[basename]-clean.txt)'
+            '(default: [out-dir]/[basename]-clean.txt)'
         )
     )
     parser.add_argument(
@@ -134,7 +144,7 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help=(
             'The encoding plan manifest output file '
-            '(default: [parent directory of inputfile]/[basename]-plan.txt)'
+            '(default: [out-dir]/[basename]-plan.txt)'
         )
     )
     parser.add_argument(
@@ -142,34 +152,6 @@ def parse_args(args: list) -> Namespace:
         action='store_true',
         default=False,
         help='Encode the text to audio file(s)'
-    )
-    parser.add_argument(
-        '--encode-dir',
-        type=Path,
-        default=None,
-        help=(
-            'The working directory in which to save the encoded fragment '
-            'audio files before concatenation or copying '
-            '(default: temporary directory)'
-        )
-    )
-    parser.add_argument(
-        '--copy',
-        action='store_true',
-        default=False,
-        help=(
-            'Copy the encoded fragment audio files to another directory '
-            'when complete'
-        )
-    )
-    parser.add_argument(
-        '--copy-dir',
-        type=Path,
-        default=None,
-        help=(
-            'The directory to copy the encoded fragment audio files to '
-            '(default: current working directory)'
-        )
     )
     parser.add_argument(
         '--concat',
@@ -183,7 +165,7 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help=(
             'The concatenated audio output file '
-            '(default: [current working directory]/[basename].[wav|ogg|mp3])'
+            '(default: [out-dir]/[basename].[wav|ogg|mp3])'
         )
     )
     parser.add_argument(
@@ -200,7 +182,7 @@ def parse_args(args: list) -> Namespace:
         help=(
             'The manifest output file (default: '
             '[path of inputfile] if inputfile is a manifest, '
-            'otherwise [copy-dir]/[basename]-manifest.json)'
+            'otherwise [out-dir]/[basename]-manifest.json)'
         )
     )
     parser.add_argument(
