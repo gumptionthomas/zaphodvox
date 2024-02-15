@@ -33,31 +33,35 @@ def main(
     handle_version_and_ntd(args, console)
     try:
         validate(args)
+
         if not args.basename and args.inputfile:
             args.basename = args.inputfile.stem
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
-        args.indexes = args.indexes if manifest else None
         args.named_voices = read_voices(args.voices_file, manifest)
+        args.indexes = args.indexes if manifest else None
+
         if args.clean and not manifest:
             text = clean(args, text)
+
         if args.plan or args.encode:
             manifest = plan(args, text, manifest)
             if args.plan:
-                filename = f'{args.basename}-plan.json'
-                plan_out = file_path(args.plan_out, filename, args.out_dir)
-                write_manifest(manifest, plan_out)
-        if manifest:
-            if args.encode:
-                manifest = encode(args, manifest)
-                if args.save_manifest:
-                    filename = f'{args.basename}-manifest.json'
-                    manifest_out = file_path(
-                        args.manifest_out, filename, args.out_dir
-                    )
-                    write_manifest(manifest, manifest_out)
-            if args.concat:
-                concat(args, manifest)
+                fn = f'{args.basename}-plan.json'
+                fp = file_path(args.plan_out, fn, args.out_dir)
+                write_manifest(manifest, fp)
+
+        if args.encode:
+            assert manifest is not None
+            manifest = encode(args, manifest)
+            if args.save_manifest:
+                fn = f'{args.basename}-manifest.json'
+                fp = file_path(args.manifest_out, fn, args.out_dir)
+                write_manifest(manifest, fp)
+
+        if args.concat and manifest:
+            concat(args, manifest)
+
         if args.delete_history:
             if delete := getattr(args.encoder, 'delete_history', None):
                 delete()
@@ -159,9 +163,9 @@ def clean(args: Namespace, text: str) -> str:
     out_dir: Optional[Path] = args.out_dir
 
     text = clean_text(text, max_chars=max_chars)
-    filename = f'{basename}-clean.txt'
-    clean_out = file_path(clean_out, filename, out_dir)
-    write_cleaned(text, clean_out)
+    fn = f'{basename}-clean.txt'
+    fp = file_path(clean_out, fn, out_dir)
+    write_cleaned(text, fp)
     return text
 
 
@@ -351,25 +355,25 @@ def file_extension(
     return file_ext or 'wav'
 
 
-def write_cleaned(text: str, path: Path) -> None:
-    """Writes the given manifest to the specified path.
+def write_cleaned(text: str, file_path: Path) -> None:
+    """Writes the given manifest to the specified file path.
 
     Args:
         manifest: The `Manifest` to be written.
-        path: The `Path` to the output file where the manifest will be saved.
+        file_path: The `Path` to the output file where the manifest will be saved.
     """
-    with open(str(path), 'w') as f:
+    with open(str(file_path), 'w') as f:
         f.write(text)
 
 
-def write_manifest(manifest: Manifest, path: Path) -> None:
-    """Writes the given manifest to the specified path.
+def write_manifest(manifest: Manifest, file_path: Path) -> None:
+    """Writes the given manifest to the specified file path.
 
     Args:
         manifest: The `Manifest` to be written.
-        path: The `Path` to the output file where the manifest will be saved.
+        file_path: The `Path` to the output file where the manifest will be saved.
     """
-    with open(str(path), 'w') as f:
+    with open(str(file_path), 'w') as f:
         f.write(manifest.model_dump_json())
 
 
