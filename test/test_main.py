@@ -58,6 +58,7 @@ class TestMain():
             str(tmp_path / 'test-00000.wav'), 'wb'
         )
         mock_write.assert_any_call(mock_google.audio_content)
+        # No silence
         mock_audio.segment_cls.silence.assert_not_called()
         # Concat file
         mock_audio.segment_cls.empty.assert_called_once()
@@ -84,6 +85,7 @@ class TestMain():
             '--basename=test',
             '--encode',
             '--concat',
+            '--silence-duration=42',
             '--indexes=0, 2,4 ',
             'test-manifest.json'
         ]
@@ -124,7 +126,7 @@ class TestMain():
         # No other google fragments
         assert mock_google.client.synthesize_speech.call_count == 2
         # Fragment #4 (silence)
-        mock_audio.segment_cls.silent.assert_called_once()
+        mock_audio.segment_cls.silent.assert_called_once_with(duration=42)
         mock_audio.segment.export.assert_any_call(
             'test-00004.wav', format='wav'
         )
@@ -211,7 +213,7 @@ class TestMain():
         assert mock_elevenlabs.generate.call_count == 2
         assert mock_elevenlabs.save.call_count == 2
         # Fragment #4 (silence)
-        mock_audio.segment_cls.silent.assert_called_once()
+        mock_audio.segment_cls.silent.assert_called_once_with(duration=500)
         mock_audio.segment.export.assert_any_call(
             'test-00004.mp3', format='mp3'
         )
