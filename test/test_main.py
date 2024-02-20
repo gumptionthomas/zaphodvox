@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, call, mock_open
 
 import pytest
-from google.cloud.texttospeech import AudioEncoding, SynthesisInput
+from google.cloud.texttospeech import SynthesisInput
 
 from zaphodvox.main import main
 from zaphodvox.arg_parser import parse_args
@@ -10,7 +10,7 @@ from zaphodvox.arg_parser import parse_args
 
 class TestMain():
     def test_main(
-        self, text_to_encode, google_voice, mock_builtins_open,
+        self, text_to_encode, audio_encoding, google_voice, mock_builtins_open,
         voices_json_data, mock_audio, mock_google, tmp_path
     ):
         # Setup
@@ -46,9 +46,7 @@ class TestMain():
         request = {
             'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
             'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(
-                AudioEncoding.LINEAR16
-            )
+            'audio_config': google_voice.get_audio_config(audio_encoding)
         }
         mock_google.client.synthesize_speech.assert_called_once_with(
             request=request
@@ -76,8 +74,8 @@ class TestMain():
         assert mock_builtins_open.call_count == 4
 
     def test_main_manifest(
-        self, google_voice, mock_builtins_open, manifest_json_data,
-        mock_audio, mock_google
+        self, audio_encoding, google_voice, mock_builtins_open,
+        manifest_json_data, mock_audio, mock_google
     ):
         # Setup
         sys_args = [
@@ -111,9 +109,7 @@ class TestMain():
         request = {
             'input': SynthesisInput(ssml='<speak>Text 0</speak>'),
             'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(
-                AudioEncoding.LINEAR16
-            )
+            'audio_config': google_voice.get_audio_config(audio_encoding)
         }
         mock_google.client.synthesize_speech.assert_any_call(request=request)
         mock_builtins_open.assert_any_call('test-00000.wav', 'wb')
@@ -364,8 +360,8 @@ class TestMain():
         mock_elevenlabs.history.from_api.assert_called_once_with()
 
     def test_main_encode_exception(
-        self, text_to_encode, google_voice, mock_builtins_open, mock_audio,
-        mock_google, capfd
+        self, text_to_encode, audio_encoding, google_voice, mock_builtins_open,
+        mock_audio, mock_google, capfd
     ):
         error = 'encode exception'
         # Setup
@@ -393,9 +389,7 @@ class TestMain():
         request = {
             'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
             'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(
-                AudioEncoding.LINEAR16
-            )
+            'audio_config': google_voice.get_audio_config(audio_encoding)
         }
         mock_google.client.synthesize_speech.assert_any_call(request=request)
         assert mock_google.client.synthesize_speech.call_count == 5
@@ -412,7 +406,7 @@ class TestMain():
         assert error in out
 
     def test_main_concat_exception(
-        self, text_to_encode, google_voice, mock_builtins_open,
+        self, text_to_encode, audio_encoding, google_voice, mock_builtins_open,
         mock_google, mock_audio, capfd
     ):
         # Setup
@@ -442,9 +436,7 @@ class TestMain():
         request = {
             'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
             'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(
-                AudioEncoding.LINEAR16
-            )
+            'audio_config': google_voice.get_audio_config(audio_encoding)
         }
         mock_google.client.synthesize_speech.assert_called_once_with(
             request=request

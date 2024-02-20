@@ -3,14 +3,13 @@ from pathlib import Path
 import pytest
 from google.cloud.texttospeech import (
     AudioConfig,
-    AudioEncoding,
     SynthesisInput,
     VoiceSelectionParams,
 )
 
+from zaphodvox.arg_parser import parse_args
 from zaphodvox.elevenlabs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.encoder import GoogleEncoder
-from zaphodvox.arg_parser import parse_args
 
 
 class TestGoogleVoice():
@@ -27,8 +26,8 @@ class TestGoogleVoice():
 
 class TestGoogleEncoder():
     def test_t2s(
-            self, google_voice, text_to_encode, mock_builtins_open,
-            mock_google
+        self, audio_encoding, google_voice, text_to_encode, mock_builtins_open,
+        mock_google
     ):
         # Setup
         google_encoder = GoogleEncoder()
@@ -58,7 +57,7 @@ class TestGoogleEncoder():
                 )
             ),
             'audio_config': AudioConfig(
-                audio_encoding=AudioEncoding.LINEAR16,
+                audio_encoding=audio_encoding,
                 speaking_rate=google_voice.speaking_rate,
                 pitch=google_voice.pitch,
                 volume_gain_db=google_voice.volume_gain_db,
