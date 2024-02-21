@@ -178,7 +178,7 @@ def mock_google() -> Iterator[MockGoogle]:
 
 MockElevenlabs = namedtuple(
     'MockElevenlabs',
-    ['history', 'save', 'generate', 'elvoice', 'from_voice_id']
+    ['history', 'save', 'generate', 'elvoice', 'from_voice_id', 'set_api_key']
 )
 
 
@@ -189,6 +189,19 @@ def mock_elevenlabs() -> Iterator[MockElevenlabs]:
         patch('zaphodvox.elevenlabs.encoder.save') as save,
         patch('zaphodvox.elevenlabs.encoder.generate') as generate,
         patch('zaphodvox.elevenlabs.encoder.ELVoice') as elvoice,
-        patch('zaphodvox.elevenlabs.voice.VoiceSettings.from_voice_id') as fvid
+        patch('zaphodvox.elevenlabs.voice.VoiceSettings.from_voice_id') as fvid,
+        patch('zaphodvox.elevenlabs.encoder.set_api_key') as sak
     ):
-        yield MockElevenlabs(history, save, generate, elvoice, fvid)
+        yield MockElevenlabs(history, save, generate, elvoice, fvid, sak)
+
+
+MockProgressBar = namedtuple('MockProgressBar', ['audio', 'encoder'])
+
+
+@pytest.fixture
+def mock_progress_bar() -> Iterator[MockProgressBar]:
+    with (
+        patch('zaphodvox.audio.ProgressBar') as apb,
+        patch('zaphodvox.encoder.ProgressBar') as epb
+    ):
+        yield MockProgressBar(apb, epb)

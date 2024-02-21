@@ -1,12 +1,11 @@
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import call
 
 from zaphodvox.audio import concat_files
 from zaphodvox.manifest import Fragment, Manifest
 
 
 class TestConcat():
-    @patch('zaphodvox.audio.ProgressBar')
     def test_concat(self, mock_progress_bar, mock_audio):
         # Setup
         audio_path = Path('/path/to/audio')
@@ -21,8 +20,8 @@ class TestConcat():
         concat_files(audio_path, manifest, 'wav', output_filepath)
 
         # Verify
-        assert mock_progress_bar.call_count == 2
-        mock_progress_bar.assert_any_call(
+        assert mock_progress_bar.audio.call_count == 2
+        mock_progress_bar.audio.assert_any_call(
             'Concatinating', total=len(filenames)
         )
         mock_audio_segment_cls.empty.assert_called_once()
@@ -30,7 +29,7 @@ class TestConcat():
         mock_audio_segment_cls.from_file.assert_has_calls([
             call(str(audio_path / f), format='wav') for f in filenames
         ])
-        mock_progress_bar.assert_any_call('Exporting', total=None)
+        mock_progress_bar.audio.assert_any_call('Exporting', total=None)
         mock_audio_segment.export.assert_called_once_with(
             str(output_filepath), format='wav'
         )

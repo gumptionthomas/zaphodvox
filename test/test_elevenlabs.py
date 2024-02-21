@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from zaphodvox.elevenlabs.encoder import ElevenLabsEncoder
@@ -80,8 +80,7 @@ class TestElevenLabsEncoder():
         mock_elevenlabs.history.from_api.assert_called_once_with()
         mock_history_item.delete.assert_called_once_with()
 
-    @patch('zaphodvox.elevenlabs.encoder.set_api_key')
-    def test_from_args(self, set_api_key, elevenlabs_voice):
+    def test_from_args(self, mock_elevenlabs, elevenlabs_voice):
         # Setup
         args = parse_args([
             '--api-key=1234',
@@ -93,7 +92,7 @@ class TestElevenLabsEncoder():
         encoder, voice = ElevenLabsEncoder.from_args(args)
 
         # Verify
-        set_api_key.assert_called_once_with('1234')
+        mock_elevenlabs.set_api_key.assert_called_once_with('1234')
         assert isinstance(encoder, ElevenLabsEncoder)
         assert voice.voice_id == elevenlabs_voice.voice_id
 

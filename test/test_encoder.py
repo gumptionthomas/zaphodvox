@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import call
 
 from google.cloud.texttospeech import SynthesisInput
 
@@ -9,7 +9,6 @@ from zaphodvox.text import parse_text
 
 
 class TestEncoder():
-    @patch('zaphodvox.encoder.ProgressBar')
     def test_encode(
         self, mock_progress_bar, audio_encoding, google_voice,
         mock_builtins_open, mock_google, mock_audio
@@ -69,11 +68,10 @@ class TestEncoder():
         )
         assert mock_write.call_args_list[2] == call(mock_google.audio_content)
         # Progress bar
-        mock_progress_bar.assert_called_once_with(
+        mock_progress_bar.encoder.assert_called_once_with(
             'Encoding', total=sum(len(t) for t in full_text.split('\n'))
         )
 
-    @patch('zaphodvox.encoder.ProgressBar')
     def test_encode_max_chars(
         self, mock_progress_bar, audio_encoding, google_voice,
         mock_builtins_open, mock_google, mock_audio
@@ -123,7 +121,7 @@ class TestEncoder():
         )
         assert mock_write.call_args_list[1] == call(mock_google.audio_content)
         # Progress bar
-        mock_progress_bar.assert_called_once_with(
+        mock_progress_bar.encoder.assert_called_once_with(
             'Encoding', total=(
                 sum(len(t) for t in full_text.split('\n')) +
                 len('\n <break time=\"0.100s\"/> ') + 2 # newlines
