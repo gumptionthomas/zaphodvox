@@ -391,8 +391,9 @@ class TestMain():
             'voice': google_voice.voice_selection_params,
             'audio_config': google_voice.get_audio_config(audio_encoding)
         }
-        mock_google.client.synthesize_speech.assert_any_call(request=request)
-        assert mock_google.client.synthesize_speech.call_count == 5
+        # 5 tries
+        calls = [call(request=request)] * 5
+        mock_google.client.synthesize_speech.assert_has_calls(calls)
         # No silence
         mock_audio.segment_cls.silent.assert_not_called()
         # Concat files not called
