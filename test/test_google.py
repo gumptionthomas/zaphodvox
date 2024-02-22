@@ -8,7 +8,7 @@ from google.cloud.texttospeech import (
 )
 
 from zaphodvox.arg_parser import parse_args
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
+from zaphodvox.e11labs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.encoder import GoogleEncoder
 
 

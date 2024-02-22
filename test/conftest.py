@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 from google.cloud.texttospeech import AudioEncoding
 
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
+from zaphodvox.e11labs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.voice import GoogleVoice
 
 
@@ -185,12 +185,12 @@ MockElevenlabs = namedtuple(
 @pytest.fixture
 def mock_elevenlabs() -> Iterator[MockElevenlabs]:
     with (
-        patch('zaphodvox.elevenlabs.encoder.History') as history,
-        patch('zaphodvox.elevenlabs.encoder.save') as save,
-        patch('zaphodvox.elevenlabs.encoder.generate') as generate,
-        patch('zaphodvox.elevenlabs.encoder.ELVoice') as elvoice,
-        patch('zaphodvox.elevenlabs.voice.VoiceSettings.from_voice_id') as fvid,
-        patch('zaphodvox.elevenlabs.encoder.set_api_key') as sak
+        patch('zaphodvox.e11labs.encoder.History') as history,
+        patch('zaphodvox.e11labs.encoder.save') as save,
+        patch('zaphodvox.e11labs.encoder.generate') as generate,
+        patch('zaphodvox.e11labs.encoder.ELVoice') as elvoice,
+        patch('zaphodvox.e11labs.voice.VoiceSettings.from_voice_id') as fvid,
+        patch('zaphodvox.e11labs.encoder.set_api_key') as sak
     ):
         yield MockElevenlabs(history, save, generate, elvoice, fvid, sak)
 

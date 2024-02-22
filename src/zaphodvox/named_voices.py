@@ -2,7 +2,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
+from zaphodvox.e11labs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.voice import GoogleVoice
 from zaphodvox.voice import Voice
 

@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from zaphodvox.elevenlabs.encoder import ElevenLabsEncoder
+from zaphodvox.e11labs.encoder import ElevenLabsEncoder
 from zaphodvox.arg_parser import parse_args
 
 

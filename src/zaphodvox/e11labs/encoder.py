@@ -6,7 +6,7 @@ from elevenlabs import History, generate, save, set_api_key
 from elevenlabs import Voice as ELVoice
 from tenacity import Retrying, stop_after_attempt
 
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
+from zaphodvox.e11labs.voice import ElevenLabsVoice
 from zaphodvox.encoder import Encoder
 from zaphodvox.progress import ProgressBar
 from zaphodvox.voice import Voice

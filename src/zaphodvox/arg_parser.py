@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Optional, Sequence, get_args
 
 from zaphodvox.encoder import Encoder
-from zaphodvox.elevenlabs.encoder import AudioFormat as ElevenLabsAudioFormat
+from zaphodvox.e11labs.encoder import AudioFormat as ElevenLabsAudioFormat
 from zaphodvox.googlecloud.encoder import AudioFormat as GoogleAudioFormat
 
 
