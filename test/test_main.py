@@ -10,8 +10,8 @@ from zaphodvox.arg_parser import parse_args
 
 class TestMain():
     def test_main(
-        self, text_to_encode, audio_encoding, google_voice, mock_builtins_open,
-        voices_json_data, mock_audio, mock_google, tmp_path
+        self, audio_encoding, google_voice, mock_audio, mock_builtins_open,
+        mock_google, text_to_encode, tmp_path, voices_json_data
     ):
         # Setup
         sys_args = [
@@ -74,8 +74,8 @@ class TestMain():
         assert mock_builtins_open.call_count == 4
 
     def test_main_manifest(
-        self, audio_encoding, google_voice, mock_builtins_open,
-        manifest_json_data, mock_audio, mock_google
+        self, audio_encoding, google_voice, mock_audio, mock_builtins_open,
+        mock_google, manifest_json_data
     ):
         # Setup
         sys_args = [
@@ -224,8 +224,8 @@ class TestMain():
         assert mock_write.call_count == 1
 
     def test_main_manifest_no_voice(
-        self, mock_builtins_open, no_voice_manifest_json_data, mock_audio,
-        mock_google, capfd
+        self, capfd, mock_audio, mock_builtins_open, mock_google,
+        no_voice_manifest_json_data
     ):
         # Setup
         sys_args = [
@@ -265,8 +265,8 @@ class TestMain():
         assert 'No voice specified' in out
 
     def test_main_manifest_incorrect_voice(
-        self, mock_builtins_open, incorrect_voice_manifest_json_data,
-        mock_audio, mock_google, capfd
+        self, capfd, incorrect_voice_manifest_json_data, mock_audio,
+        mock_builtins_open, mock_google
     ):
         # Setup
         sys_args = [
@@ -304,8 +304,8 @@ class TestMain():
         assert 'No voice specified' in out
 
     def test_main_elevenlabs(
-        self, text_to_encode, elevenlabs_voice, mock_builtins_open,
-        mock_elevenlabs, mock_audio
+        self, elevenlabs_voice, mock_audio, mock_builtins_open,
+        mock_elevenlabs, text_to_encode
     ):
         # Setup
         voice_id = elevenlabs_voice.voice_id
@@ -360,8 +360,8 @@ class TestMain():
         mock_elevenlabs.history.from_api.assert_called_once_with()
 
     def test_main_encode_exception(
-        self, text_to_encode, audio_encoding, google_voice, mock_builtins_open,
-        mock_audio, mock_google, capfd
+        self, audio_encoding, capfd, google_voice, mock_audio, mock_builtins_open,
+        mock_google, text_to_encode
     ):
         error = 'encode exception'
         # Setup
@@ -407,8 +407,8 @@ class TestMain():
         assert error in out
 
     def test_main_concat_exception(
-        self, text_to_encode, audio_encoding, google_voice, mock_builtins_open,
-        mock_google, mock_audio, capfd
+        self, audio_encoding, capfd, google_voice, mock_audio, mock_builtins_open,
+        mock_google, text_to_encode
     ):
         # Setup
         error  = 'from_file error'
@@ -472,7 +472,7 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'version 1.3.0' in out
 
-    def test_nothing_to_do(self, mock_builtins_open, capfd):
+    def test_nothing_to_do(self, capfd, mock_builtins_open):
         # Setup
         sys_args = ['test.txt']
 
@@ -486,7 +486,7 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'Nothing to do' in out
 
-    def test_no_inputfile(self, mock_builtins_open, capfd):
+    def test_no_inputfile(self, capfd, mock_builtins_open):
         # Setup
         sys_args = ['--encode']
         args = parse_args(sys_args)
@@ -501,7 +501,7 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'No input file specified.' in out
 
-    def test_nonexistant_inputfile(self, mock_google, capfd):
+    def test_nonexistant_inputfile(self, capfd, mock_google):
         # Setup
         sys_args = ['--encoder=google', '--encode', 'test.txt']
         args = parse_args(sys_args)
@@ -516,7 +516,7 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'No such file' in out
 
-    def test_no_encoder(self, mock_builtins_open, capfd):
+    def test_no_encoder(self, capfd, mock_builtins_open):
         # Setup
         sys_args = ['--encode', 'test.txt']
         args = parse_args(sys_args)
@@ -532,7 +532,7 @@ class TestMain():
         assert 'No encoder specified' in out
 
     def test_manifest_no_encoder(
-        self, mock_builtins_open, manifest_json_data, capfd
+        self, capfd, manifest_json_data, mock_builtins_open
     ):
         # Setup
         mock_builtins_open.read_data = manifest_json_data
@@ -549,7 +549,7 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'No encoder specified' in out
 
-    def test_invalid_encoder(self, mock_builtins_open, capfd):
+    def test_invalid_encoder(self, capfd, mock_builtins_open):
         # Setup
         sys_args = ['--encoder=google', '--encode', 'test.txt']
         args = parse_args(sys_args)
@@ -565,7 +565,7 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'Encoder "NotARealEncoder" not found' in out
 
-    def test_clean(self, text_to_encode, mock_builtins_open):
+    def test_clean(self, mock_builtins_open, text_to_encode):
         # Setup
         sys_args = ['--clean', 'test.txt']
 
@@ -584,7 +584,7 @@ class TestMain():
             f'{text_to_encode}\n\n'
         )
 
-    def test_clean_max_chars(self, text_to_encode, mock_builtins_open):
+    def test_clean_max_chars(self, mock_builtins_open, text_to_encode):
         # Setup
         sys_args = ['--clean', '--max-chars=7', 'test.txt']
 
@@ -642,7 +642,7 @@ class TestMain():
         mock_elevenlabs.history.from_api.assert_called_once()
         mock_history_item.delete.assert_called_once()
 
-    def test_google_delete_history(self, mock_google, capfd):
+    def test_google_delete_history(self, capfd, mock_google):
         # Setup
         sys_args = [
             '--encoder=google',

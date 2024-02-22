@@ -26,8 +26,8 @@ class TestGoogleVoice():
 
 class TestGoogleEncoder():
     def test_t2s(
-        self, audio_encoding, google_voice, text_to_encode, mock_builtins_open,
-        mock_google
+        self, audio_encoding, google_voice, mock_builtins_open,
+        mock_google, text_to_encode
     ):
         # Setup
         google_encoder = GoogleEncoder()

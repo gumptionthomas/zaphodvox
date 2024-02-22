@@ -42,7 +42,7 @@ class TestElevenLabsVoice():
 
 
 class TestElevenLabsEncoder():
-    def test_t2s(self, text_to_encode, elevenlabs_voice, mock_elevenlabs):
+    def test_t2s(self, elevenlabs_voice, mock_elevenlabs, text_to_encode):
         # Setup
         filepath = Path('/path/to/output.wav')
         encoder = ElevenLabsEncoder()
@@ -80,7 +80,7 @@ class TestElevenLabsEncoder():
         mock_elevenlabs.history.from_api.assert_called_once_with()
         mock_history_item.delete.assert_called_once_with()
 
-    def test_from_args(self, mock_elevenlabs, elevenlabs_voice):
+    def test_from_args(self, elevenlabs_voice, mock_elevenlabs):
         # Setup
         args = parse_args([
             '--api-key=1234',

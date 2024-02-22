@@ -10,8 +10,8 @@ from zaphodvox.text import parse_text
 
 class TestEncoder():
     def test_encode(
-        self, mock_progress_bar, audio_encoding, google_voice,
-        mock_builtins_open, mock_google, mock_audio
+        self, audio_encoding, google_voice, mock_audio, mock_builtins_open,
+        mock_google, mock_progress_bar
     ):
         # Setup
         full_text = "Paragraph 1\n\nParagraph 2\nParagraph 3"
@@ -73,8 +73,8 @@ class TestEncoder():
         )
 
     def test_encode_max_chars(
-        self, mock_progress_bar, audio_encoding, google_voice,
-        mock_builtins_open, mock_google, mock_audio
+        self, audio_encoding, google_voice, mock_audio, mock_builtins_open,
+        mock_google, mock_progress_bar
     ):
         # Setup
         full_text = "Paragraph 1\n\nParagraph 2\nParagraph 3"

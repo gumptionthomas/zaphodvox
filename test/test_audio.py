@@ -6,7 +6,7 @@ from zaphodvox.manifest import Fragment, Manifest
 
 
 class TestConcat():
-    def test_concat(self, mock_progress_bar, mock_audio):
+    def test_concat(self, mock_audio, mock_progress_bar):
         # Setup
         audio_path = Path('/path/to/audio')
         filenames = [f'audio-file-{i:05d}.wav' for i in range(3)]
