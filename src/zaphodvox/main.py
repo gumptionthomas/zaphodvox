@@ -374,7 +374,7 @@ def write_manifest(manifest: Manifest, file_path: Path) -> None:
         file_path: The `Path` to the output file where the manifest will be saved.
     """
     with open(str(file_path), 'w') as f:
-        f.write(manifest.model_dump_json())
+        f.write(manifest.model_dump_json(indent=4, exclude_none=True))
 
 
 if __name__ == '__main__':
