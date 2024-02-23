@@ -143,6 +143,7 @@ class TestMain():
             '--encoder=elevenlabs',
             '--basename=test',
             '--voices-file=voices.json',
+            '--silence-duration=500',
             '--encode',
             '--concat',
             '--indexes=0, 2, 4',

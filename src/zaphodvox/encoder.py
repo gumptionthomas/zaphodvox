@@ -93,14 +93,6 @@ class Encoder(ABC):
         voices = voices or {}
         indexes = indexes or list(range(len(manifest.fragments)))
         fragments = [manifest.fragments[i] for i in indexes]
-        for fragment in fragments:
-            duration = fragment.silence_duration
-            if silence_duration is not None:
-                duration = silence_duration
-            if duration:
-                fragment.text = re.sub(
-                    r'(\n{2,})', break_tag(duration), fragment.text
-                )
         total_chars = sum([len(s.text) for s in fragments])
         with ProgressBar('Encoding', total=total_chars) as bar:
             for fragment in fragments:
@@ -109,7 +101,13 @@ class Encoder(ABC):
                     if encode_dir:
                         filepath = encode_dir / filepath.name
                     filepath = filepath.with_suffix(f'.{self.file_extension}')
+                    if (duration := silence_duration) is None:
+                        duration = fragment.silence_duration
                     if (num_chars := len(fragment.text)) > 0:
+                        if duration:
+                            fragment.text = re.sub(
+                                r'(\n{2,})', break_tag(duration), fragment.text
+                            )
                         if (not fragment.voice) and fragment.voice_name:
                             fragment.voice = voices.get(fragment.voice_name)
                         if fragment.voice is None:
@@ -121,6 +119,7 @@ class Encoder(ABC):
                     fragment.encoded = datetime.now(timezone.utc)
                     fragment.filename = filepath.name
                     fragment.encoder = self.name
+                    fragment.silence_duration = duration
                     fragment.audio_format = self.audio_format
         return manifest
 

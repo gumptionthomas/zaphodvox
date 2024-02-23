@@ -20,7 +20,7 @@ class TestArgParser():
         assert args.voice_name is None
         assert args.voice_id is None
         assert args.max_chars is None
-        assert args.silence_duration == 500
+        assert args.silence_duration is None
         assert args.basename is None
         assert args.indexes is None
         assert not args.clean

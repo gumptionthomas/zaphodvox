@@ -92,10 +92,10 @@ def parse_args(args: list) -> Namespace:
         '-s',
         '--silence-duration',
         type=int,
-        default=500,
+        default=None,
         help=(
             'The milliseconds of silence to use for empty strings '
-            '(default: 500)'
+            '(default: no silence)'
         )
     )
     parser.add_argument(

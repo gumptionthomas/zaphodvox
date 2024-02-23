@@ -123,7 +123,6 @@ class TestEncoder():
         # Progress bar
         mock_progress_bar.encoder.assert_called_once_with(
             'Encoding', total=(
-                sum(len(t) for t in full_text.split('\n')) +
-                len('\n <break time=\"0.100s\"/> ') + 2 # newlines
+                sum(len(t) for t in full_text.split('\n')) + 3 # newlines
             )
         )
