@@ -33,7 +33,9 @@ class NamedVoices(BaseModel):
     voices: Optional[dict[str, NamedVoicesConfiguration]] = None
     """The named voice configurations."""
 
-    def encoder_voices(self, encoder_name: Optional[str]) -> dict[str, Optional[Voice]]:
+    def encoder_voices(
+        self, encoder_name: Optional[str]
+    ) -> dict[str, Optional[Voice]]:
         """Returns the named voices for the given encoder name.
 
         Args:
