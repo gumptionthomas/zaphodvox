@@ -54,13 +54,13 @@ class TestElevenLabsEncoder():
         mock_elevenlabs.from_voice_id.assert_called_once_with(
             elevenlabs_voice.voice_id
         )
-        mock_elevenlabs.elvoice.assert_called_once_with(
+        mock_elevenlabs.voice.assert_called_once_with(
             voice_id=elevenlabs_voice.voice_id,
             settings=mock_elevenlabs.from_voice_id.return_value
         )
         mock_elevenlabs.generate.assert_called_once_with(
             text=text_to_encode,
-            voice=mock_elevenlabs.elvoice.return_value,
+            voice=mock_elevenlabs.voice.return_value,
             output_format=encoder.audio_format,
             model=elevenlabs_voice.model
         )

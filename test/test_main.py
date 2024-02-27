@@ -172,13 +172,13 @@ class TestMain():
         mock_elevenlabs.from_voice_id.assert_any_call(
             elevenlabs_voice.voice_id
         )
-        mock_elevenlabs.elvoice.assert_any_call(
+        mock_elevenlabs.voice.assert_any_call(
             voice_id=elevenlabs_voice.voice_id,
             settings=mock_elevenlabs.from_voice_id.return_value
         )
         mock_elevenlabs.generate.assert_any_call(
             text='Text 0',
-            voice=mock_elevenlabs.elvoice.return_value,
+            voice=mock_elevenlabs.voice.return_value,
             output_format='mp3_44100_128',
             model='eleven_multilingual_v2'
         )
@@ -190,13 +190,13 @@ class TestMain():
         mock_elevenlabs.from_voice_id.assert_any_call(
             elevenlabs_voice.voice_id
         )
-        mock_elevenlabs.elvoice.assert_any_call(
+        mock_elevenlabs.voice.assert_any_call(
             voice_id=elevenlabs_voice.voice_id,
             settings=mock_elevenlabs.from_voice_id.return_value
         )
         mock_elevenlabs.generate.assert_any_call(
             text='Text 2',
-            voice=mock_elevenlabs.elvoice.return_value,
+            voice=mock_elevenlabs.voice.return_value,
             output_format='mp3_44100_128',
             model='eleven_multilingual_v2'
         )
@@ -206,7 +206,7 @@ class TestMain():
         )
         # No other elevenlabs fragments
         assert mock_elevenlabs.from_voice_id.call_count == 2
-        assert mock_elevenlabs.elvoice.call_count == 2
+        assert mock_elevenlabs.voice.call_count == 2
         assert mock_elevenlabs.generate.call_count == 2
         assert mock_elevenlabs.save.call_count == 2
         # Fragment #4 (silence)
@@ -328,14 +328,14 @@ class TestMain():
         mock_builtins_open.assert_any_call(str(Path('test.txt')), 'r')
         # Voice
         mock_elevenlabs.from_voice_id.assert_called_once_with(voice_id)
-        mock_elevenlabs.elvoice.assert_called_once_with(
+        mock_elevenlabs.voice.assert_called_once_with(
             voice_id=voice_id,
             settings=mock_elevenlabs.from_voice_id.return_value
         )
         # Fragment #0
         mock_elevenlabs.generate.assert_called_once_with(
             text=text_to_encode,
-            voice=mock_elevenlabs.elvoice.return_value,
+            voice=mock_elevenlabs.voice.return_value,
             output_format='mp3_44100_128',
             model='eleven_multilingual_v2'
         )
