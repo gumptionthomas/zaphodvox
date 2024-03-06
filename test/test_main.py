@@ -627,6 +627,35 @@ class TestMain():
         ]
         assert mock_builtins_open.call_args_list == expected_calls
 
+    def test_plan_no_voice(
+        self, capfd, mock_builtins_open, mock_google, voices_json_data
+    ):
+        # Setup
+        sys_args = [
+            '--encoder=google',
+            '--voices-file=voices.json',
+            '--plan',
+            'test.txt'
+        ]
+        text = 'ZVOX: voice_1\nThis is\nZVOX: voice_null\na test'
+        mock_builtins_open.side_effect = (
+            mock_open(read_data=text).return_value,
+            mock_open(read_data=voices_json_data).return_value
+        )
+
+        # Run
+        with pytest.raises(SystemExit) as se:
+            main(sys_args)
+
+        # Verify
+        mock_google.client_cls.assert_called_with()
+        assert se.value.code == 1
+        out, _ = capfd.readouterr()
+        assert (
+            'No voice specified for name "voice_null"' in
+            out
+        )
+
     def test_delete_history(self, mock_elevenlabs):
         # Setup
         sys_args = [

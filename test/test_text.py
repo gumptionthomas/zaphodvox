@@ -24,7 +24,7 @@ class TestTextParser():
         # Setup
         full_text = (
             "Paragraph 1\nZVOX: Trillian\nParagraph 2\n"
-            "ZVOX: Marvin\nParagraph 3"
+            "Paragraph 3"
         )
 
         # Run
@@ -45,7 +45,7 @@ class TestTextParser():
         # Setup
         full_text = (
             "Paragraph 1\nZVOX: Trillian\nParagraph 2\n\n"
-            "ZVOX: Marvin\nParagraph 3\n\nParagraph 4"
+            "Paragraph 3\n\nParagraph 4"
         )
 
         # Run

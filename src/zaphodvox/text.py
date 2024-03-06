@@ -61,9 +61,13 @@ def parse_text(
                 if matched_voice:
                     line_voice = matched_voice
                     line_voice_name = matched_name
-                continue
+                    continue
+                else:
+                    raise ValueError(
+                        f'No voice specified for name "{matched_name}".'
+                    )
             if not line_voice:
-                raise ValueError('No voice specified for text fragment.')
+                raise ValueError(f'No voice specified for line: "{line}"')
             if max_chars and fragments:
                 fragment = fragments[-1]
                 if len(fragment.text) + 1 + len(line) <= max_chars:
