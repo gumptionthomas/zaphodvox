@@ -57,13 +57,15 @@ class TestTextParser():
         )
 
         # Verify
-        assert len(text_fragments) == 3
-        assert text_fragments[0].text == 'Paragraph 1\n'
+        assert len(text_fragments) == 4
+        assert text_fragments[0].text == 'Paragraph 1'
         assert text_fragments[0].voice == google_voice
-        assert text_fragments[1].text == 'Paragraph 2\n\nParagraph 3\n\n'
+        assert text_fragments[1].text == 'Paragraph 2\n\nParagraph 3'
         assert text_fragments[1].voice == google_voice_2
-        assert text_fragments[2].text == 'Paragraph 4'
+        assert text_fragments[2].text == ''
         assert text_fragments[2].voice == google_voice_2
+        assert text_fragments[3].text == 'Paragraph 4'
+        assert text_fragments[3].voice == google_voice_2
 
     def test_encode_no_voice(self):
         with pytest.raises(ValueError):

@@ -145,6 +145,6 @@ def break_tag(duration: int) -> Callable[[re.Match], str]:
         """
         breaks = len(match.group(1)) - 1
         seconds = min(3.0, (breaks * duration) / 1000.0)
-        return f'\n <break time="{seconds:.3f}s" /> '
+        return f' <break time="{seconds:.3f}s" /> '
 
     return _break_tag

@@ -70,17 +70,25 @@ def parse_text(
                 raise ValueError(f'No voice specified for line: "{line}"')
             if max_chars and fragments:
                 fragment = fragments[-1]
-                if len(fragment.text) + 1 + len(line) <= max_chars:
-                    if line_voice == fragment.voice:
+                if fragment.text:
+                    new_len = len(fragment.text) + len(line)
+                    if new_len <= max_chars and line_voice == fragment.voice:
                         fragment.text = '\n'.join([fragment.text, line])
                         continue
-                fragment.text += '\n'
-            fragment = Fragment(
-                text=line,
+                    tnl = len(fragment.text) - len(fragment.text.rstrip('\n'))
+                    if tnl:
+                        fragment.text = fragment.text[:-tnl]
+                        for _ in range(tnl):
+                            fragments.append(Fragment(
+                                text='',
+                                voice=line_voice if line else None,
+                                voice_name=line_voice_name if line else None
+                            ))
+            fragments.append(Fragment(
+                text=line.strip(),
                 voice=line_voice if line else None,
                 voice_name=line_voice_name if line else None
-            )
-            fragments.append(fragment)
+            ))
         return fragments
 
 

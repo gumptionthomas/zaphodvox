@@ -100,8 +100,8 @@ class TestEncoder():
         mock_audio_segment.export.assert_not_called()
         mock_google.client.synthesize_speech.assert_any_call(request={
             'input': SynthesisInput(
-                ssml='<speak>Paragraph 1\n <break time=\"0.100s\" /> '
-                'Paragraph 2\n</speak>'
+                ssml='<speak>Paragraph 1 <break time=\"0.100s\" /> '
+                'Paragraph 2</speak>'
             ),
             'voice': google_voice.voice_selection_params,
             'audio_config': google_voice.get_audio_config(audio_encoding)
@@ -123,6 +123,6 @@ class TestEncoder():
         # Progress bar
         mock_progress_bar.encoder.assert_called_once_with(
             'Encoding', total=(
-                sum(len(t) for t in full_text.split('\n')) + 3 # newlines
+                sum(len(t) for t in full_text.split('\n')) + 2 # newlines
             )
         )
