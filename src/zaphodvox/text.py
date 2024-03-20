@@ -7,6 +7,10 @@ from zaphodvox.manifest import Fragment
 from zaphodvox.voice import Voice
 
 
+STOP_CHARS = ['.', '?', '!']
+QUOTE_CHARS = ['', '\'', '"']
+
+
 def match_voice(
     text: str,
     voices: Optional[dict[str, Optional[Voice]]] = None,
@@ -68,22 +72,19 @@ def parse_text(
                     )
             if not line_voice:
                 raise ValueError(f'No voice specified for line: "{line}"')
-            if max_chars and fragments:
-                fragment = fragments[-1]
-                if fragment.text:
-                    new_len = len(fragment.text) + len(line)
-                    if new_len <= max_chars and line_voice == fragment.voice:
-                        fragment.text = '\n'.join([fragment.text, line])
-                        continue
-                    tnl = len(fragment.text) - len(fragment.text.rstrip('\n'))
-                    if tnl:
-                        fragment.text = fragment.text[:-tnl]
-                        for _ in range(tnl):
-                            fragments.append(Fragment(
-                                text='',
-                                voice=line_voice if line else None,
-                                voice_name=line_voice_name if line else None
-                            ))
+            if max_chars and fragments and (pf := fragments[-1]) and pf.text:
+                new_len = len(pf.text) + len(line)
+                if new_len < max_chars and line_voice == pf.voice:
+                    pf.text = '\n'.join([pf.text, line])
+                    continue
+                if tnl := len(pf.text) - len(pf.text.rstrip('\n')):
+                    pf.text = pf.text[:-tnl]
+                    for _ in range(tnl):
+                        fragments.append(Fragment(
+                            text='',
+                            voice=line_voice if line else None,
+                            voice_name=line_voice_name if line else None
+                        ))
             fragments.append(Fragment(
                 text=line.strip(),
                 voice=line_voice if line else None,
@@ -92,7 +93,7 @@ def parse_text(
         return fragments
 
 
-def end_of_paragraph(text: str) -> bool:
+def end_of_sentence(text: str) -> bool:
     """Check if given text ends with a punctuation mark indicating the end of
     a sentence.
 
@@ -103,13 +104,10 @@ def end_of_paragraph(text: str) -> bool:
         `True` if the text ends with a punctuation mark indicating
             the end of a sentence, `False` otherwise.
     """
-    for ending in ['.', '?', '!']:
-        if (
-            text.endswith(ending) or
-            text.endswith(ending+'\'') or
-            text.endswith(ending+'"')
-        ):
-            return True
+    for stop in STOP_CHARS:
+        for quote in QUOTE_CHARS:
+            if text.endswith(stop + quote):
+                return True
     return False
 
 
@@ -126,11 +124,9 @@ def split_text(text: str, max_chars: int) -> str:
     """
     if len(text) <= max_chars:
         return text
-    i = max(
-        text.rfind('.', 0, max_chars),
-        text.rfind('?', 0, max_chars),
-        text.rfind('!', 0, max_chars)
-    )
+    i = max([text.rfind(stop + quote, 0, max_chars)
+        for stop in STOP_CHARS for quote in QUOTE_CHARS
+    ])
     if i == -1:
         i = text.rfind(' ', 0, max_chars)
     else:
@@ -162,7 +158,7 @@ def clean_text(text: str, max_chars: Optional[int] = None) -> str:
                 line = split_text(line, max_chars)
             if not lines[i + 1]:
                 new_line = line + '\n'
-            elif end_of_paragraph(line):
+            elif end_of_sentence(line):
                 new_line = line + '\n\n'
             else:
                 new_line = line + ' '
