@@ -230,10 +230,14 @@ def encode(args: Namespace, manifest: Manifest) -> Manifest:
     out_dir: Optional[Path] = args.out_dir
     encoder: Encoder = args.encoder
     encoder_name: str = args.encoder_name
-    indexes: Optional[list[int]] = args.indexes
+    index_str: Optional[str] = args.indexes
     named_voices: NamedVoices = args.named_voices
     silence_duration: Optional[int] = args.silence_duration
 
+    indexes: list[int] = sum(((
+        list(range(*[int(b) + c for c, b in enumerate(a.strip().split('-'))]))
+        if '-' in a.strip() else [int(a.strip())]
+    ) for a in index_str.split(',')), []) if index_str else []
     encoder_voices = named_voices.encoder_voices(encoder_name)
     manifest = encoder.encode_manifest(
         manifest,

@@ -146,7 +146,7 @@ class TestMain():
             '--silence-duration=500',
             '--encode',
             '--concat',
-            '--indexes=0, 2, 4',
+            '--indexes=0,2-4',
             'test-manifest.json'
         ]
         mock_builtins_open.side_effect = (
@@ -205,10 +205,10 @@ class TestMain():
             'test-00002.mp3',
         )
         # No other elevenlabs fragments
-        assert mock_elevenlabs.from_voice_id.call_count == 2
-        assert mock_elevenlabs.voice.call_count == 2
-        assert mock_elevenlabs.generate.call_count == 2
-        assert mock_elevenlabs.save.call_count == 2
+        assert mock_elevenlabs.from_voice_id.call_count == 3
+        assert mock_elevenlabs.voice.call_count == 3
+        assert mock_elevenlabs.generate.call_count == 3
+        assert mock_elevenlabs.save.call_count == 3
         # Fragment #4 (silence)
         mock_audio.segment_cls.silent.assert_called_once_with(duration=500)
         mock_audio.segment.export.assert_any_call(

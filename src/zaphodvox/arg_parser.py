@@ -17,15 +17,6 @@ def parse_args(args: list) -> Namespace:
         The parsed command-line arguments.
     """
 
-    def list_of_ints(arg):
-        """Converts a comma-delimited string of integers to a
-        list of integers.
-
-        Args:
-            arg: The comma-delimited string of integers.
-        """
-        return list(map(int, arg.split(',')))
-
     parser = ArgumentParser(
         description=(
             'Encode a text file or manifest json file into synthetic speech '
@@ -110,11 +101,11 @@ def parse_args(args: list) -> Namespace:
     parser.add_argument(
         '-i',
         '--indexes',
-        type=list_of_ints,
         default=None,
         help=(
             'The comma-delimited list of manifest audio file indexes '
-            '(0-based) to encode (default: all indexes)'
+            '(0-based, \'-\' delimited ranges) to encode '
+            '(default: all indexes)'
         )
     )
     parser.add_argument(
