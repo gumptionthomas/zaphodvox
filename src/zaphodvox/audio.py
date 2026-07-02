@@ -42,7 +42,12 @@ def concat_files(
     with ProgressBar('Concatinating', total=len(filepaths)) as bar:
         segments = AudioSegment.empty()
         for filepath in filepaths:
-            segments += AudioSegment.from_file(str(filepath), format=format)
+            try:
+                segments += AudioSegment.from_file(
+                    str(filepath), format=format
+                )
+            except Exception as e:
+                bar.console.print(f'Skipping {filepath.name}: {e}')
             bar.next()
     with ProgressBar('Exporting', total=None) as bar:
         segments.export(str(output_filepath), format=format)

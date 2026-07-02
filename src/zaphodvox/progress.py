@@ -40,6 +40,11 @@ class ProgressBar():
         )
         self._live = Live(Panel.fit(self._progress, title=title))
 
+    @property
+    def console(self):
+        """The console object for the progress bar."""
+        return self._progress.console
+
     def next(self, n: int = 1) -> None:
         """Advances the progress by the specified amount.
 

@@ -5,6 +5,7 @@ from typing import Any, Optional, Sequence, get_args
 from zaphodvox.encoder import Encoder
 from zaphodvox.e11labs.encoder import AudioFormat as ElevenLabsAudioFormat
 from zaphodvox.googlecloud.encoder import AudioFormat as GoogleAudioFormat
+from zaphodvox.alltalk.encoder import AllTalkEncoder  # noqa: F401
 
 
 def parse_args(args: list) -> Namespace:
@@ -303,6 +304,19 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help='The API key to use for ElevenLabs auth'
     )
+    alltalk_group = parser.add_argument_group(
+        'alltalk options',
+        description=(
+            'AllTalk TTS options '
+            '(see: https://cloud.google.com/text-to-speech/docs)'
+        )
+    )
+    alltalk_group.add_argument(
+        '--language-code',
+        default='en',
+        help='The language code to use (default: en)'
+    )
+
     return parser.parse_args(args)
 
 

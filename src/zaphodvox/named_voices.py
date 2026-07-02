@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from zaphodvox.e11labs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.voice import GoogleVoice
+from zaphodvox.alltalk.voice import AllTalkVoice
 from zaphodvox.voice import Voice
 
 
@@ -14,6 +15,8 @@ class NamedVoicesConfiguration(BaseModel):
     """A `GoogleVoice` configuration."""
     elevenlabs: Optional[ElevenLabsVoice] = None
     """An `ElevenLabsVoice` configuration."""
+    alltalk: Optional[AllTalkVoice] = None
+    """An `AllTalkVoice` configuration."""
 
     def encoder_voice(self, encoder_name: str) -> Optional[Voice]:
         """Returns the voice for the given encoder name.

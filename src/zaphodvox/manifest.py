@@ -38,6 +38,15 @@ class Manifest(BaseModel):
     """The named voice configurations."""
 
     @property
+    def length(self) -> int:
+        """The number of audio file fragments in the manifest.
+
+        Returns:
+            The number of audio file fragments.
+        """
+        return len(self.fragments)
+
+    @property
     def file_extension(self) -> Optional[str]:
         """The file extension of the audio file fragments.
 

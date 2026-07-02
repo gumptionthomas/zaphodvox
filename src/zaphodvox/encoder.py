@@ -91,7 +91,7 @@ class Encoder(ABC):
             The `Manifest` with the encoded fragments info.
         """
         voices = voices or {}
-        indexes = indexes or list(range(len(manifest.fragments)))
+        indexes = indexes or list(range(manifest.length))
         fragments = [manifest.fragments[i] for i in indexes]
         total_chars = sum([len(s.text) for s in fragments])
         with ProgressBar('Encoding', total=total_chars) as bar:
@@ -106,7 +106,9 @@ class Encoder(ABC):
                     if (num_chars := len(fragment.text)) > 0:
                         if duration:
                             fragment.text = re.sub(
-                                r'(\n{2,})', break_tag(duration), fragment.text
+                                r'(\n{2,})',
+                                self.break_tag(duration),
+                                fragment.text
                             )
                         if (not fragment.voice) and fragment.voice_name:
                             fragment.voice = voices.get(fragment.voice_name)
@@ -123,28 +125,27 @@ class Encoder(ABC):
                     fragment.audio_format = self.audio_format
         return manifest
 
-
-def break_tag(duration: int) -> Callable[[re.Match], str]:
-    """Create a function to replace multiple newlines with a break tag.
-
-    Args:
-        duration: The duration of the break in milliseconds.
-
-    Returns:
-        A function that takes a `re.Match` object and returns a string.
-    """
-
-    def _break_tag(match: re.Match) -> str:
-        """Replace multiple newlines with a break tag.
+    def break_tag(self, duration: int) -> Callable[[re.Match], str]:
+        """Create a function to replace multiple newlines with a break tag.
 
         Args:
-            match: The `re.Match` object.
+            duration: The duration of the break in milliseconds.
 
         Returns:
-            The break tag string.
+            A function that takes a `re.Match` object and returns a string.
         """
-        breaks = len(match.group(1)) - 1
-        seconds = min(3.0, (breaks * duration) / 1000.0)
-        return f' <break time="{seconds:.3f}s" /> '
 
-    return _break_tag
+        def _break_tag(match: re.Match) -> str:
+            """Replace multiple newlines with a break tag.
+
+            Args:
+                match: The `re.Match` object.
+
+            Returns:
+                The break tag string.
+            """
+            breaks = len(match.group(1)) - 1
+            seconds = min(3.0, (breaks * duration) / 1000.0)
+            return f' <break time="{seconds:.3f}s" /> '
+
+        return _break_tag

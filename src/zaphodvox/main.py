@@ -234,16 +234,11 @@ def encode(args: Namespace, manifest: Manifest) -> Manifest:
     named_voices: NamedVoices = args.named_voices
     silence_duration: Optional[int] = args.silence_duration
 
-    indexes: list[int] = sum(((
-        list(range(*[int(b) + c for c, b in enumerate(a.strip().split('-'))]))
-        if '-' in a.strip() else [int(a.strip())]
-    ) for a in index_str.split(',')), []) if index_str else []
-    encoder_voices = named_voices.encoder_voices(encoder_name)
     manifest = encoder.encode_manifest(
         manifest,
         encode_dir=out_dir,
-        indexes=indexes,
-        voices=encoder_voices,
+        indexes=parse_indexes(index_str, manifest.length),
+        voices=named_voices.encoder_voices(encoder_name),
         silence_duration=silence_duration
     )
     manifest.set_used_voices(named_voices.voices)
@@ -313,6 +308,34 @@ def read_voices(
     if manifest:
         voices.add_voices(manifest.voices)
     return voices
+
+
+def parse_indexes(index_str: Optional[str], range_length: int) -> list[int]:
+    """Reads the indexes from the specified string.
+
+    Args:
+        indexes: The string containing the indexes.
+        range_length: The length of the range to use if no indexes are
+            specified.
+
+    Returns:
+        A list of indexes.
+    """
+    ranges: list[range] = []
+    if index_str_clean := index_str.strip() if index_str else '':
+        for part in (s.strip() for s in index_str_clean.split(',')):
+            if '-' in part:
+                start_str, end_str = (s.strip() for s in part.split('-', 1))
+                ranges.append(range(
+                    int(start_str) if start_str else 0,
+                    int(end_str) if end_str else range_length
+                ))
+            else:
+                idx = int(part)
+                ranges.append(range(idx, idx + 1))
+    else:
+        ranges.append(range(0, range_length))
+    return sorted(set(sum((list(r) for r in ranges), [])))
 
 
 def file_path(
