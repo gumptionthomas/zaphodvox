@@ -4,8 +4,9 @@ from typing import Iterator
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
+from google.cloud.texttospeech import AudioEncoding
 
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
+from zaphodvox.e11labs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.voice import GoogleVoice
 
 
@@ -15,11 +16,26 @@ def text_to_encode() -> str:
 
 
 @pytest.fixture
+def audio_encoding() -> int:
+    return AudioEncoding.LINEAR16
+
+
+@pytest.fixture
 def google_voice() -> GoogleVoice:
     return GoogleVoice(
         voice_id='A',
         language='en',
-        region='US',
+        region='UK',
+        type='Wavenet'
+    )
+
+
+@pytest.fixture
+def google_voice_2() -> GoogleVoice:
+    return GoogleVoice(
+        voice_id='C',
+        language='en',
+        region='UK',
         type='Wavenet'
     )
 
@@ -30,14 +46,23 @@ def elevenlabs_voice() -> ElevenLabsVoice:
 
 
 @pytest.fixture
-def voices_data(google_voice, elevenlabs_voice) -> dict:
+def elevenlabs_voice_2() -> ElevenLabsVoice:
+    return ElevenLabsVoice(voice_id='Trillian')
+
+
+@pytest.fixture
+def voices_data(
+    google_voice, elevenlabs_voice, elevenlabs_voice_2
+) -> dict:
     return {
         'voices': {
             'voice_1': {
                 'google': google_voice.model_dump(),
                 'elevenlabs': elevenlabs_voice.model_dump()
             },
-            'voice_2': {'elevenlabs': {'voice_id': 'Arthur'}}
+            'voice_2': {
+                'elevenlabs': elevenlabs_voice_2.model_dump()
+            }
         }
     }
 
@@ -82,10 +107,10 @@ def manifest_json_data(voices_data, fragments_data) -> str:
 
 
 @pytest.fixture
-def no_voice_manifest_json_data() -> str:
+def no_voice_manifest_json_data(text_to_encode) -> str:
     return json.dumps({
     'fragments': [{
-            'text': 'Text 0',
+            'text': text_to_encode,
             'filename': 'test-00000.wav',
             'encoder': 'google',
             'audio_format': 'linear16',
@@ -95,18 +120,20 @@ def no_voice_manifest_json_data() -> str:
 
 
 @pytest.fixture
-def incorrect_voice_manifest_json_data() -> str:
+def incorrect_voice_manifest_json_data(
+    elevenlabs_voice, elevenlabs_voice_2, text_to_encode
+) -> str:
     return json.dumps({
         'fragments': [{
-                'text': 'Text 0',
+                'text': text_to_encode,
                 'filename': 'test-00000.wav',
-                'voice': {'voice_id': 'Ford'},
+                'voice': elevenlabs_voice_2.model_dump(),
                 'voice_name': 'voice_1',
                 'encoder': 'google',
                 'audio_format': 'linear16',
                 'silence_duration': None
         }],
-        'voices': {'voice_1': {'elevenlabs': {'voice_id': 'Ford'}}}
+        'voices': {'voice_1': {'elevenlabs': elevenlabs_voice.model_dump()}}
     })
 
 
@@ -132,25 +159,6 @@ def mock_audio() -> Iterator[tuple[MagicMock, MagicMock]]:
         yield MockAudio(segment_cls, segment)
 
 
-@pytest.fixture
-def mock_copy() -> Iterator[MagicMock]:
-    with (
-        patch('zaphodvox.audio.shutil.copy') as copy,
-        patch('zaphodvox.audio.Path.exists', return_value=True)
-    ):
-        yield copy
-
-
-MockTempDir = namedtuple('MockTempDir', ['temp_dir_cls', 'path'])
-
-
-@pytest.fixture
-def mock_temp_dir(tmp_path) -> Iterator[MockTempDir]:
-    with patch('zaphodvox.main.TemporaryDirectory') as temp_dir:
-        temp_dir.return_value.__enter__.return_value = str(tmp_path)
-        yield MockTempDir(temp_dir, tmp_path)
-
-
 MockGoogle = namedtuple(
     'MockGoogle', ['client_cls', 'client', 'audio_content']
 )
@@ -163,27 +171,37 @@ def mock_google() -> Iterator[MockGoogle]:
     ) as client_cls:
         client = client_cls.return_value
         client_cls.from_service_account_file.return_value = client
-        client.return_value.synthesize_speech.return_value.audio_content = \
-            b'audio'
         mock_response = client.synthesize_speech.return_value
+        mock_response.audio_content = b'audio'
         yield MockGoogle(client_cls, client, mock_response.audio_content)
 
 
 MockElevenlabs = namedtuple(
     'MockElevenlabs',
-    ['history', 'save', 'generate', 'elvoice', 'from_voice_id']
+    ['history', 'save', 'generate', 'voice', 'from_voice_id', 'set_api_key']
 )
 
 
 @pytest.fixture
 def mock_elevenlabs() -> Iterator[MockElevenlabs]:
     with (
-        patch('zaphodvox.elevenlabs.encoder.History') as history,
-        patch('zaphodvox.elevenlabs.encoder.save') as save,
-        patch('zaphodvox.elevenlabs.encoder.generate') as generate,
-        patch('zaphodvox.elevenlabs.encoder.ELVoice') as elvoice,
-        patch(
-            'zaphodvox.elevenlabs.voice.VoiceSettings.from_voice_id'
-        ) as from_voice_id
+        patch('zaphodvox.e11labs.encoder.History') as history,
+        patch('zaphodvox.e11labs.encoder.save') as save,
+        patch('zaphodvox.e11labs.encoder.generate') as generate,
+        patch('zaphodvox.e11labs.encoder.ElevenLabsVoice') as voice,
+        patch('zaphodvox.e11labs.voice.VoiceSettings.from_voice_id') as fvid,
+        patch('zaphodvox.e11labs.encoder.set_api_key') as sak
     ):
-        yield MockElevenlabs(history, save, generate, elvoice, from_voice_id)
+        yield MockElevenlabs(history, save, generate, voice, fvid, sak)
+
+
+MockProgressBar = namedtuple('MockProgressBar', ['audio', 'encoder'])
+
+
+@pytest.fixture
+def mock_progress_bar() -> Iterator[MockProgressBar]:
+    with (
+        patch('zaphodvox.audio.ProgressBar') as apb,
+        patch('zaphodvox.encoder.ProgressBar') as epb
+    ):
+        yield MockProgressBar(apb, epb)

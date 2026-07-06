@@ -2,8 +2,9 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
+from zaphodvox.e11labs.voice import ElevenLabsVoice
 from zaphodvox.googlecloud.voice import GoogleVoice
+from zaphodvox.alltalk.voice import AllTalkVoice
 from zaphodvox.voice import Voice
 
 
@@ -14,6 +15,8 @@ class NamedVoicesConfiguration(BaseModel):
     """A `GoogleVoice` configuration."""
     elevenlabs: Optional[ElevenLabsVoice] = None
     """An `ElevenLabsVoice` configuration."""
+    alltalk: Optional[AllTalkVoice] = None
+    """An `AllTalkVoice` configuration."""
 
     def encoder_voice(self, encoder_name: str) -> Optional[Voice]:
         """Returns the voice for the given encoder name.
@@ -33,7 +36,9 @@ class NamedVoices(BaseModel):
     voices: Optional[dict[str, NamedVoicesConfiguration]] = None
     """The named voice configurations."""
 
-    def encoder_voices(self, encoder_name: Optional[str]) -> dict[str, Optional[Voice]]:
+    def encoder_voices(
+        self, encoder_name: Optional[str]
+    ) -> dict[str, Optional[Voice]]:
         """Returns the named voices for the given encoder name.
 
         Args:

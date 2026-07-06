@@ -3,7 +3,8 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-from zaphodvox.parser import parse_args
+
+from zaphodvox.arg_parser import parse_args
 
 
 class TestArgParser():
@@ -13,18 +14,17 @@ class TestArgParser():
         # General
         assert args.inputfile == Path('test.txt')
         assert args.version is False
+        assert args.out_dir is None
         assert args.encoder_name is None
         assert args.voices_file is None
         assert args.voice_name is None
         assert args.voice_id is None
         assert args.max_chars is None
-        assert args.silence_duration == 500
+        assert args.silence_duration is None
         assert args.basename is None
         assert args.indexes is None
         assert not args.clean
         assert not args.encode
-        assert not args.copy
-        assert args.copy_dir is None
         assert not args.concat
         assert args.concat_out is None
         assert args.save_manifest is True

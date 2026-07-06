@@ -2,10 +2,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SerializeAsAny
 
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
-from zaphodvox.googlecloud.voice import GoogleVoice
 from zaphodvox.named_voices import NamedVoicesConfiguration
 from zaphodvox.voice import Voice
 
@@ -17,7 +15,7 @@ class Fragment(BaseModel):
     """The text converted to speech."""
     filename: Optional[str] = None
     """The file name of the audio file."""
-    voice: Optional[GoogleVoice | ElevenLabsVoice | Voice] = None
+    voice: Optional[SerializeAsAny[Voice]] = None
     """The `Voice` settings for the speech."""
     voice_name: Optional[str] = None
     """The name of the voice used for the speech."""
@@ -38,6 +36,15 @@ class Manifest(BaseModel):
     """The list of audio file fragments and their settings."""
     voices: Optional[dict[str, NamedVoicesConfiguration]] = None
     """The named voice configurations."""
+
+    @property
+    def length(self) -> int:
+        """The number of audio file fragments in the manifest.
+
+        Returns:
+            The number of audio file fragments.
+        """
+        return len(self.fragments)
 
     @property
     def file_extension(self) -> Optional[str]:

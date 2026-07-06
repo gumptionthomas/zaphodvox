@@ -3,10 +3,10 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from elevenlabs import History, generate, save, set_api_key
-from elevenlabs import Voice as ELVoice
+from elevenlabs import Voice as ElevenLabsVoice
 from tenacity import Retrying, stop_after_attempt
 
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
+from zaphodvox.e11labs.voice import ElevenLabsVoice as E11LabsVoice
 from zaphodvox.encoder import Encoder
 from zaphodvox.progress import ProgressBar
 from zaphodvox.voice import Voice
@@ -89,9 +89,9 @@ class ElevenLabsEncoder(Encoder):
             voice: The `Voice` to use for the speech conversion.
             filepath: The `Path` of the generated audio file.
         """
-        if not isinstance(voice, ElevenLabsVoice):
+        if not isinstance(voice, E11LabsVoice):
             raise ValueError('Not an ElevenLabsVoice.')
-        elevenlabs_voice = ELVoice(
+        elevenlabs_voice = ElevenLabsVoice(
             voice_id=voice.voice_id, settings=voice.voice_settings
         )
         generate_kwargs = {
@@ -148,5 +148,5 @@ class ElevenLabsEncoder(Encoder):
         if api_key:
             set_api_key(api_key)
         encoder = cls(audio_format=elevenlabs_audio_format)
-        voice = ElevenLabsVoice.from_args(args)
+        voice = E11LabsVoice.from_args(args)
         return (encoder, voice)

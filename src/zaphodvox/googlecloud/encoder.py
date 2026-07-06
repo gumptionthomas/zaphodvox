@@ -115,17 +115,18 @@ class GoogleEncoder(Encoder):
         """
         if not isinstance(voice, GoogleVoice):
             raise ValueError('Not a GoogleVoice.')
+        if text and not text.strip().startswith('<speak>'):
+            text = f'<speak>{text}</speak>'
         for attempt in Retrying(reraise=True, stop=stop_after_attempt(5)):
             with attempt:
-                response = self._client.synthesize_speech(
-                    request={
-                        'input': SynthesisInput(text=text),
-                        'voice': voice.voice_selection_params,
-                        'audio_config': voice.get_audio_config(
-                            self._audio_encoding
-                        )
-                    }
-                )
+                request = {
+                    'input': SynthesisInput(ssml=text),
+                    'voice': voice.voice_selection_params,
+                    'audio_config': voice.get_audio_config(
+                        self._audio_encoding
+                    )
+                }
+                response = self._client.synthesize_speech(request=request)
                 with open(str(filepath), 'wb') as out:
                     out.write(response.audio_content)
 

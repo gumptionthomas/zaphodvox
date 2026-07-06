@@ -1,17 +1,16 @@
 import sys
 from argparse import Namespace
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Optional
 
 from rich.console import Console
 
 from zaphodvox import __version__
-from zaphodvox.audio import concat_files, copy_files
+from zaphodvox.audio import concat_files
 from zaphodvox.encoder import Encoder
 from zaphodvox.manifest import Manifest
 from zaphodvox.named_voices import NamedVoices
-from zaphodvox.parser import parse_args
+from zaphodvox.arg_parser import parse_args
 from zaphodvox.text import clean_text, parse_text
 from zaphodvox.voice import Voice
 
@@ -34,22 +33,35 @@ def main(
     handle_version_and_ntd(args, console)
     try:
         validate(args)
+
         if not args.basename and args.inputfile:
             args.basename = args.inputfile.stem
-        args.parent_dir = None
-        if args.inputfile:
-            args.parent_dir = Path(args.inputfile.parent)
-        args.copy_dir = args.copy_dir or Path.cwd()
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
         args.named_voices = read_voices(args.voices_file, manifest)
-        plan_manifest = clean_plan(args, text, manifest)
         args.indexes = args.indexes if manifest else None
-        if manifest:
-            args.encode_dir = args.encode_dir or args.parent_dir
-        if args.encode_dir and args.copy_dir.samefile(args.encode_dir):
-            args.copy_dir = None
-        encode_concat_copy(args, plan_manifest)
+
+        if args.clean and not manifest:
+            text = clean(args, text)
+
+        if args.plan or args.encode:
+            manifest = plan(args, text, manifest)
+            if args.plan:
+                fn = f'{args.basename}-plan.json'
+                fp = file_path(args.plan_out, fn, args.out_dir)
+                write_manifest(manifest, fp)
+
+        if args.encode:
+            assert manifest is not None
+            manifest = encode(args, manifest)
+            if args.save_manifest:
+                fn = f'{args.basename}-manifest.json'
+                fp = file_path(args.manifest_out, fn, args.out_dir)
+                write_manifest(manifest, fp)
+
+        if args.concat and manifest:
+            concat(args, manifest)
+
         if args.delete_history:
             if delete := getattr(args.encoder, 'delete_history', None):
                 delete()
@@ -70,13 +82,12 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
     plan: bool = args.plan
     encode: bool = args.encode
     concat: bool = args.concat
-    copy: bool = args.copy
     delete_history: bool = args.delete_history
 
     if args.version:
         console.print(f'{Path(sys.argv[0]).stem}, version {__version__}')
         sys.exit(0)
-    if not any([clean, plan, encode, concat, copy, delete_history]):
+    if not any([clean, plan, encode, concat, delete_history]):
         console.print(
             "[italic dim]Nothing to do... I'd give you advice, "
             "but you wouldn't listen. No one ever does.[/italic dim]"
@@ -135,7 +146,30 @@ def encoder_voice(
     return encoder, voice
 
 
-def clean_plan(
+def clean(args: Namespace, text: str) -> str:
+    """Cleans the specified text and returns it.
+
+    Args:
+        text: The text to be cleaned.
+        max_chars: The maximum number of characters to allow in the cleaned
+            text.
+
+    Returns:
+        The cleaned text.
+    """
+    basename: str = args.basename
+    clean_out: Optional[Path] = args.clean_out
+    max_chars: Optional[int] = args.max_chars
+    out_dir: Optional[Path] = args.out_dir
+
+    text = clean_text(text, max_chars=max_chars)
+    fn = f'{basename}-clean.txt'
+    fp = file_path(clean_out, fn, out_dir)
+    write_cleaned(text, fp)
+    return text
+
+
+def plan(
     args: Namespace, text: str, manifest: Optional[Manifest]
 ) -> Manifest:
     """Optionally cleans the text and then generates a plan manifest, both of
@@ -149,110 +183,85 @@ def clean_plan(
         The plan manifest.
     """
     basename: str = args.basename
-    clean: bool = args.clean
-    clean_out: Optional[Path] = args.clean_out
-    encode: bool = args.encode
     encoder: Optional[Encoder] = args.encoder
     encoder_name: Optional[str] = args.encoder_name
     max_chars: Optional[int] = args.max_chars
     named_voices: NamedVoices = args.named_voices
-    parent_dir: Path = args.parent_dir
-    plan: bool = args.plan
-    plan_out: Optional[Path] = args.plan_out
     silence_duration: Optional[int] = args.silence_duration
     voice: Optional[Voice] = args.voice
     voice_name: Optional[str] = args.voice_name
 
-    if clean and not manifest:
-        text = clean_text(text, max_chars=max_chars)
-        filename = f'{basename}-clean.txt'
-        clean_out = file_path(clean_out, filename, parent_dir)
-        write_cleaned(text, clean_out)
     plan_manifest = None
-    if plan or encode:
-        encoder_voices = named_voices.encoder_voices(encoder_name)
-        if not voice and voice_name:
-            voice = encoder_voices.get(voice_name)
-        fragments = manifest.fragments if manifest else None
-        if fragments is not None:
-            for fragment in fragments:
-                if fragment.voice_name:
-                    fragment.voice = encoder_voices.get(fragment.voice_name)
-                else:
-                    fragment.voice = voice
-        else:
-            fragments = parse_text(
-                text,
-                voice=voice,
-                voices=encoder_voices,
-                max_chars=max_chars
-            )
-        file_ext = file_extension(manifest, encoder)
-        plan_manifest = Manifest.plan(
-            fragments, basename, file_ext, silence_duration=silence_duration
+    encoder_voices = named_voices.encoder_voices(encoder_name)
+    if not voice and voice_name:
+        voice = encoder_voices.get(voice_name)
+    if manifest:
+        fragments = []
+        for fragment in manifest.fragments:
+            f = fragment.model_copy()
+            if f.voice_name:
+                f.voice = encoder_voices.get(f.voice_name)
+            else:
+                f.voice = voice
+            fragments.append(f)
+    else:
+        fragments = parse_text(
+            text, voice=voice, voices=encoder_voices, max_chars=max_chars
         )
-        plan_manifest.set_used_voices(named_voices.voices)
-        if plan:
-            filename = f'{basename}-plan.json'
-            plan_out = file_path(plan_out, filename, parent_dir)
-            write_manifest(plan_manifest, plan_out)
-    plan_manifest = plan_manifest or manifest or Manifest()
+    file_ext = file_extension(manifest, encoder)
+    plan_manifest = Manifest.plan(
+        fragments, basename, file_ext, silence_duration=silence_duration
+    )
+    plan_manifest.set_used_voices(named_voices.voices)
     return plan_manifest
 
 
-def encode_concat_copy(args: Namespace, manifest: Manifest) -> None:
-    """Encodes the specified manifest, optionally concatenates the
-        encoded files, and optionally copies the encoded files to the
-        specified directory.
+def encode(args: Namespace, manifest: Manifest) -> Manifest:
+    """Encodes the specified manifest and optionally concatenates the
+        encoded files to the specified directory.
 
     Args:
         args: The parsed command-line arguments.
-        manifest: The manifest to encode, concat, and/or copy.
+        manifest: The manifest to encode.
+
+    Returns:
+        The encoded manifest.
     """
-    basename: str = args.basename
-    concat: bool = args.concat
-    concat_out: Optional[Path] = args.concat_out
-    copy: bool = args.copy
-    copy_dir: Optional[Path] = args.copy_dir
-    encode: bool = args.encode
+    out_dir: Optional[Path] = args.out_dir
     encoder: Encoder = args.encoder
     encoder_name: str = args.encoder_name
-    encode_dir: Optional[Path] = args.encode_dir
-    indexes: Optional[list[int]] = args.indexes
-    manifest_out: Optional[Path] = args.manifest_out
+    index_str: Optional[str] = args.indexes
     named_voices: NamedVoices = args.named_voices
     silence_duration: Optional[int] = args.silence_duration
-    save_manifest: bool = args.save_manifest
 
-    with TemporaryDirectory() as temp_pathname:
-        encoding_dir = encode_dir or Path(temp_pathname)
-        dest_dir = copy_dir or encoding_dir
-        encoder_voices = named_voices.encoder_voices(encoder_name)
-        try:
-            if encode:
-                manifest = encoder.encode_manifest(
-                    manifest,
-                    encoding_dir,
-                    indexes=indexes,
-                    voices=encoder_voices,
-                    silence_duration=silence_duration
-                )
-                manifest.set_used_voices(named_voices.voices)
-                if save_manifest:
-                    filename = f'{basename}-manifest.json'
-                    manifest_out = file_path(manifest_out, filename, dest_dir)
-                    write_manifest(manifest, manifest_out)
-            if concat:
-                file_ext = file_extension(manifest, encoder)
-                filename = f'{basename}.{file_ext}'
-                concat_out = file_path(concat_out, filename, dest_dir)
-                concat_files(encoding_dir, manifest, file_ext, concat_out)
-            if (copy or (encode and not concat)) and copy_dir:
-                copy_files(encoding_dir, manifest, copy_dir)
-        except Exception:
-            if copy_dir:
-                copy_files(encoding_dir, manifest, copy_dir)
-            raise
+    manifest = encoder.encode_manifest(
+        manifest,
+        encode_dir=out_dir,
+        indexes=parse_indexes(index_str, manifest.length),
+        voices=named_voices.encoder_voices(encoder_name),
+        silence_duration=silence_duration
+    )
+    manifest.set_used_voices(named_voices.voices)
+    return manifest
+
+
+def concat(args: Namespace, manifest: Manifest) -> None:
+    """Encodes the specified manifest and optionally concatenates the
+        encoded files to the specified directory.
+
+    Args:
+        args: The parsed command-line arguments.
+        manifest: The manifest to encode and/or concat.
+    """
+    basename: str = args.basename
+    concat_out: Optional[Path] = args.concat_out
+    out_dir: Optional[Path] = args.out_dir
+    encoder: Encoder = args.encoder
+
+    file_ext = file_extension(manifest, encoder)
+    filename = f'{basename}.{file_ext}'
+    concat_out = file_path(concat_out, filename, out_dir)
+    concat_files(out_dir or Path(), manifest, file_ext, concat_out)
 
 
 def read_text_manifest(
@@ -301,8 +310,36 @@ def read_voices(
     return voices
 
 
+def parse_indexes(index_str: Optional[str], range_length: int) -> list[int]:
+    """Reads the indexes from the specified string.
+
+    Args:
+        indexes: The string containing the indexes.
+        range_length: The length of the range to use if no indexes are
+            specified.
+
+    Returns:
+        A list of indexes.
+    """
+    ranges: list[range] = []
+    if index_str_clean := index_str.strip() if index_str else '':
+        for part in (s.strip() for s in index_str_clean.split(',')):
+            if '-' in part:
+                start_str, end_str = (s.strip() for s in part.split('-', 1))
+                ranges.append(range(
+                    int(start_str) if start_str else 0,
+                    int(end_str) if end_str else range_length
+                ))
+            else:
+                idx = int(part)
+                ranges.append(range(idx, idx + 1))
+    else:
+        ranges.append(range(0, range_length))
+    return sorted(set(sum((list(r) for r in ranges), [])))
+
+
 def file_path(
-    path: Optional[Path], filename: str, default_dir: Path
+    path: Optional[Path], filename: str, default_dir: Optional[Path]
 ) -> Path:
     """Returns the specified path if it is a file. Otherwise, if it is a
         directory return it joined with the specified filename. Otherwise,
@@ -315,13 +352,15 @@ def file_path(
 
     Returns:
         The specified path if it is a file. Otherwise, if it is a
-            directory, the directory joined with the specified filename.
-            Otherwise the default directory joined with the specified filename.
+            directory, the directory joined with the filename.
+            Otherwise the default directory joined with the filename.
     """
     if path and path.is_dir():
         path = path / filename
-    if not path:
+    if not path and default_dir:
         path = default_dir / filename
+    if not path:
+        path = Path(filename)
     return path
 
 
@@ -343,26 +382,26 @@ def file_extension(
     return file_ext or 'wav'
 
 
-def write_cleaned(text: str, path: Path) -> None:
-    """Writes the given manifest to the specified path.
+def write_cleaned(text: str, file_path: Path) -> None:
+    """Writes the given manifest to the specified file path.
 
     Args:
         manifest: The `Manifest` to be written.
-        path: The `Path` to the output file where the manifest will be saved.
+        file_path: The `Path` to the output file where the manifest will be saved.
     """
-    with open(str(path), 'w') as f:
+    with open(str(file_path), 'w') as f:
         f.write(text)
 
 
-def write_manifest(manifest: Manifest, path: Path) -> None:
-    """Writes the given manifest to the specified path.
+def write_manifest(manifest: Manifest, file_path: Path) -> None:
+    """Writes the given manifest to the specified file path.
 
     Args:
         manifest: The `Manifest` to be written.
-        path: The `Path` to the output file where the manifest will be saved.
+        file_path: The `Path` to the output file where the manifest will be saved.
     """
-    with open(str(path), 'w') as f:
-        f.write(manifest.model_dump_json())
+    with open(str(file_path), 'w') as f:
+        f.write(manifest.model_dump_json(indent=4, exclude_none=True))
 
 
 if __name__ == '__main__':

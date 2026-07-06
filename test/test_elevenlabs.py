@@ -1,11 +1,9 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from zaphodvox.elevenlabs.encoder import ElevenLabsEncoder
-from zaphodvox.elevenlabs.voice import ElevenLabsVoice
-from zaphodvox.googlecloud.voice import GoogleVoice
-from zaphodvox.parser import parse_args
+from zaphodvox.e11labs.encoder import ElevenLabsEncoder
+from zaphodvox.arg_parser import parse_args
 
 
 class TestElevenLabsVoice():
@@ -13,13 +11,13 @@ class TestElevenLabsVoice():
         other_voice = elevenlabs_voice.model_copy()
         assert elevenlabs_voice == other_voice
 
-    def test_neq(self, elevenlabs_voice, google_voice):
-        other_voice = elevenlabs_voice.model_copy()
-        other_voice.voice_id = 'Arthur'
-        assert elevenlabs_voice != other_voice
+    def test_neq(
+        self, elevenlabs_voice, elevenlabs_voice_2, google_voice
+    ):
+        assert elevenlabs_voice != elevenlabs_voice_2
         assert elevenlabs_voice != google_voice
 
-    def test_get_settings(self, mock_elevenlabs):
+    def test_get_settings(self, elevenlabs_voice, mock_elevenlabs):
         # Setup
         mock_settings = MagicMock()
         mock_settings.stability = 0.0
@@ -29,14 +27,14 @@ class TestElevenLabsVoice():
         mock_elevenlabs.from_voice_id.return_value = mock_settings
 
         # Run
-        voice = ElevenLabsVoice(
-            voice_id='Josh', stability=0.1, similarity_boost=0.2, style=0.3,
-            use_speaker_boost=True
-        )
-        settings = voice.voice_settings
+        elevenlabs_voice.stability = 0.1
+        elevenlabs_voice.similarity_boost = 0.2
+        elevenlabs_voice.style = 0.3
+        elevenlabs_voice.use_speaker_boost = True
+        settings = elevenlabs_voice.voice_settings
 
         # Verify
-        mock_elevenlabs.from_voice_id.assert_called_once_with('Josh')
+        mock_elevenlabs.from_voice_id.assert_called_once_with('Ford')
         assert settings.stability == 0.1
         assert settings.similarity_boost == 0.2
         assert settings.style == 0.3
@@ -44,7 +42,7 @@ class TestElevenLabsVoice():
 
 
 class TestElevenLabsEncoder():
-    def test_t2s(self, text_to_encode, elevenlabs_voice, mock_elevenlabs):
+    def test_t2s(self, elevenlabs_voice, mock_elevenlabs, text_to_encode):
         # Setup
         filepath = Path('/path/to/output.wav')
         encoder = ElevenLabsEncoder()
@@ -56,13 +54,13 @@ class TestElevenLabsEncoder():
         mock_elevenlabs.from_voice_id.assert_called_once_with(
             elevenlabs_voice.voice_id
         )
-        mock_elevenlabs.elvoice.assert_called_once_with(
+        mock_elevenlabs.voice.assert_called_once_with(
             voice_id=elevenlabs_voice.voice_id,
             settings=mock_elevenlabs.from_voice_id.return_value
         )
         mock_elevenlabs.generate.assert_called_once_with(
             text=text_to_encode,
-            voice=mock_elevenlabs.elvoice.return_value,
+            voice=mock_elevenlabs.voice.return_value,
             output_format=encoder.audio_format,
             model=elevenlabs_voice.model
         )
@@ -82,8 +80,7 @@ class TestElevenLabsEncoder():
         mock_elevenlabs.history.from_api.assert_called_once_with()
         mock_history_item.delete.assert_called_once_with()
 
-    @patch('zaphodvox.elevenlabs.encoder.set_api_key')
-    def test_from_args(self, set_api_key, elevenlabs_voice):
+    def test_from_args(self, elevenlabs_voice, mock_elevenlabs):
         # Setup
         args = parse_args([
             '--api-key=1234',
@@ -95,22 +92,19 @@ class TestElevenLabsEncoder():
         encoder, voice = ElevenLabsEncoder.from_args(args)
 
         # Verify
-        set_api_key.assert_called_once_with('1234')
+        mock_elevenlabs.set_api_key.assert_called_once_with('1234')
         assert isinstance(encoder, ElevenLabsEncoder)
         assert voice.voice_id == elevenlabs_voice.voice_id
 
-    def test_t2s_wrong_voice(self):
+    def test_t2s_wrong_voice(self, google_voice):
         # Setup
         elevenlabs_encoder = ElevenLabsEncoder()
         text = "Hello, world!"
-        voice = GoogleVoice(
-            voice_id='A', language='en', region='US', type='Wavenet'
-        )
         filepath = Path('/path/to/output.wav')
 
         # Run
         with pytest.raises(ValueError) as ve:
-            elevenlabs_encoder.t2s(text, voice, filepath)
+            elevenlabs_encoder.t2s(text, google_voice, filepath)
 
         # Verify
         assert str(ve.value) == 'Not an ElevenLabsVoice.'
