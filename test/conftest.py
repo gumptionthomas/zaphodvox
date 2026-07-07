@@ -83,6 +83,22 @@ def no_voice_manifest_json_data(text_to_encode) -> str:
 
 
 @pytest.fixture
+def inline_voice_manifest_json_data(qwen_voice, text_to_encode) -> str:
+    # The fragment carries an inline voice (no voice_name, no voices map), so
+    # it must be re-encodable without re-specifying a voice.
+    return json.dumps({
+        'fragments': [{
+            'text': text_to_encode,
+            'filename': 'test-00000.wav',
+            'voice': qwen_voice.model_dump(),
+            'encoder': 'qwen',
+            'audio_format': 'wav',
+            'silence_duration': None,
+        }]
+    })
+
+
+@pytest.fixture
 def incorrect_voice_manifest_json_data(qwen_voice, text_to_encode) -> str:
     # The fragment references a voice name ("voice_2") that is not present in
     # the manifest voices, so it cannot be resolved.

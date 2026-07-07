@@ -122,6 +122,35 @@ class TestMain():
         mock_builtins_open.assert_any_call('test-manifest.json', 'w')
         assert mock_write.call_count == 1
 
+    def test_main_manifest_inline_voice(
+        self, mock_audio, mock_builtins_open, mock_qwen,
+        inline_voice_manifest_json_data, text_to_encode
+    ):
+        # A manifest carrying an inline voice (no voice_name, no voices map)
+        # must re-encode without re-specifying a voice.
+        sys_args = [
+            '--encoder=qwen',
+            '--basename=test',
+            '--encode',
+            'test-manifest.json'
+        ]
+        mock_builtins_open.side_effect = (
+            mock_open(read_data=inline_voice_manifest_json_data).return_value,
+            mock_builtins_open.return_value,
+        )
+
+        # Run
+        main(sys_args)
+
+        # Verify: synthesized using the manifest's own inline voice
+        mock_qwen.post.assert_called_once_with(
+            *speech_call(text_to_encode).args,
+            **speech_call(text_to_encode).kwargs
+        )
+        mock_qwen.write_bytes.assert_called_once_with(
+            Path('test-00000.wav'), b'audio'
+        )
+
     def test_main_manifest_no_voice(
         self, capfd, mock_audio, mock_builtins_open, mock_qwen,
         no_voice_manifest_json_data

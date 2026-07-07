@@ -190,8 +190,9 @@ def plan(
             f = fragment.model_copy()
             if f.voice_name:
                 f.voice = encoder_voices.get(f.voice_name)
-            else:
+            elif voice:
                 f.voice = voice
+            # Otherwise keep the fragment's own inline voice (if any).
             fragments.append(f)
     else:
         fragments = parse_text(
