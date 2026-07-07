@@ -1,11 +1,9 @@
-from argparse import Action, ArgumentParser, BooleanOptionalAction, Namespace
+import os
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import Any, Optional, Sequence, get_args
 
 from zaphodvox.encoder import Encoder
-from zaphodvox.e11labs.encoder import AudioFormat as ElevenLabsAudioFormat
-from zaphodvox.googlecloud.encoder import AudioFormat as GoogleAudioFormat
-from zaphodvox.alltalk.encoder import AllTalkEncoder  # noqa: F401
+from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder  # noqa: F401
 
 
 def parse_args(args: list) -> Namespace:
@@ -157,7 +155,7 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help=(
             'The concatenated audio output file '
-            '(default: [out-dir]/[basename].[wav|ogg|mp3])'
+            '(default: [out-dir]/[basename].[wav|mp3])'
         )
     )
     parser.add_argument(
@@ -180,179 +178,52 @@ def parse_args(args: list) -> Namespace:
     parser.add_argument(
         '--voice-id',
         default=None,
-        help='The voice ID to use'
+        help='The built-in preset voice/speaker to use (e.g. "Ryan")'
     )
-    google_group = parser.add_argument_group(
-        'google options',
+    qwen_group = parser.add_argument_group(
+        'qwen options',
         description=(
-            'Google Text-to-Speech options '
-            '(see: https://cloud.google.com/text-to-speech/docs)'
+            'Qwen3-TTS options (a locally-hosted Qwen3-TTS server, e.g. '
+            'https://github.com/cornball-ai/qwen3-tts-api)'
         )
     )
-    google_group.add_argument(
+    qwen_group.add_argument(
         '--voice-language',
-        default='en',
-        help='The Google language to use (default: en)'
+        default='English',
+        help='The language of the text (default: English)'
     )
-    google_group.add_argument(
-        '--voice-region',
-        default='US',
-        help='The Google language region to use (default: US)'
-    )
-    google_group.add_argument(
-        '--voice-type',
-        default='Wavenet',
-        help='The Google voice type to use (default: Wavenet)'
-    )
-    google_group.add_argument(
-        '--voice-speaking-rate',
-        type=float,
+    qwen_group.add_argument(
+        '--voice-instruct',
         default=None,
-        help='The Google speaking rate'
+        help='An optional style/emotion direction for a preset voice'
     )
-    google_group.add_argument(
-        '--voice-pitch',
-        type=float,
-        default=None,
-        help='The Google pitch'
-    )
-    google_group.add_argument(
-        '--voice-volume-gain-db',
-        type=float,
-        default=None,
-        help='The Google volume gain'
-    )
-    google_group.add_argument(
-        '--voice-sample-rate-hertz',
-        type=int,
-        default=None,
-        help='The Google sample rate in hertz'
-    )
-    google_group.add_argument(
-        '--voice-effects-profile-id',
-        nargs='+',
-        default=None,
-        help='The Google effects profile ID(s)'
-    )
-    google_group.add_argument(
-        '--google-audio-format',
-        choices=get_args(GoogleAudioFormat),
-        default='linear16',
-        help='The Google audio output format (default: linear16)'
-    )
-    google_group.add_argument(
-        '--service-account',
+    qwen_group.add_argument(
+        '--voice-ref-audio',
         type=Path,
         default=None,
-        help='The service account file to use for Google auth'
+        help='A reference audio file to clone (instead of a preset --voice-id)'
     )
-    eleven_group = parser.add_argument_group(
-        'elevenlabs options',
-        description=(
-            'ElevenLabs Text-to-Speech options '
-            '(see: https://elevenlabs.io/docs)'
+    qwen_group.add_argument(
+        '--voice-ref-text',
+        default=None,
+        help=(
+            'The transcript of --voice-ref-audio for higher-quality (ICL) '
+            'cloning (default: zero-shot clone with no transcript)'
         )
     )
-    eleven_group.add_argument(
-        '--voice-model',
-        choices=['eleven_multilingual_v2', 'eleven_monolingual_v1'],
-        default='eleven_multilingual_v2',
-        help='The ElevenLabs model to use (default: eleven_multilingual_v2)'
-    )
-    eleven_group.add_argument(
-        '--voice-stability',
-        type=float,
-        action=ScalarAction,
-        default=None,
-        help='The ElevenLabs voice stability'
-    )
-    eleven_group.add_argument(
-        '--voice-similarity-boost',
-        type=float,
-        action=ScalarAction,
-        default=None,
-        help='The ElevenLabs voice similarity boost'
-    )
-    eleven_group.add_argument(
-        '--voice-style',
-        type=float,
-        action=ScalarAction,
-        default=None,
-        help='The ElevenLabs voice style'
-    )
-    eleven_group.add_argument(
-        '--voice-use-speaker-boost',
-        type=bool,
-        action=BooleanOptionalAction,
-        default=None,
-        help='Use ElevenLabs voice speaker boost'
-    )
-    eleven_group.add_argument(
-        '--elevenlabs-audio-format',
-        choices=get_args(ElevenLabsAudioFormat),
-        default='mp3_44100_128',
-        help='The ElevenLabs audio output format (default: mp3_44100_128)'
-    )
-    eleven_group.add_argument(
-        '--delete-history',
-        action='store_true',
-        default=False,
-        help='Delete all history items after encoding'
-    )
-    eleven_group.add_argument(
-        '--api-key',
-        default=None,
-        help='The API key to use for ElevenLabs auth'
-    )
-    alltalk_group = parser.add_argument_group(
-        'alltalk options',
-        description=(
-            'AllTalk TTS options '
-            '(see: https://cloud.google.com/text-to-speech/docs)'
+    qwen_group.add_argument(
+        '--qwen-url',
+        default=os.environ.get('ZAPHODVOX_QWEN_URL', DEFAULT_URL),
+        help=(
+            'The base URL of the Qwen3-TTS server '
+            f'(default: $ZAPHODVOX_QWEN_URL or {DEFAULT_URL})'
         )
     )
-    alltalk_group.add_argument(
-        '--language-code',
-        default='en',
-        help='The language code to use (default: en)'
+    qwen_group.add_argument(
+        '--qwen-audio-format',
+        choices=['wav', 'mp3'],
+        default='wav',
+        help='The audio output format (default: wav)'
     )
 
     return parser.parse_args(args)
-
-
-class ScalarAction(Action):
-    """Custom action class for handling scalar values.
-
-    This class validates that the provided value is within the range of
-    0.0 to 1.0. If the value is outside this range, it raises an error.
-
-    Args:
-        parser: The argument parser object.
-        namespace: The namespace object.
-        values: The value(s) provided for
-            the action.
-        option_string: The option string associated with
-            the action.
-
-    Raises:
-        ArgumentTypeError: If the value is outside the range of 0.0 to 1.0.
-    """
-    def __call__(
-        self, parser: ArgumentParser, namespace: Namespace,
-        values: Optional[str | Sequence[Any]],
-        option_string: Optional[str] = None
-    ) -> None:
-        """Validates that the provided value is within the range of
-        0.0 to 1.0.
-
-        Args:
-            parser: The argument parser object.
-            namespace: The namespace object.
-            values The value(s) provided for the action.
-            option_string: The option string associated with the action.
-        """
-        if values is not None and float(str(values)) < 0.0:
-            parser.error(f'Minimum value for {option_string} is 0.0')
-        if values is not None and float(str(values)) > 1.0:
-            parser.error(f'Maximum value for {option_string} is 1.0')
-        setattr(namespace, self.dest, values)

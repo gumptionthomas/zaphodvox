@@ -1,21 +1,34 @@
 from pathlib import Path
-from unittest.mock import MagicMock, call, mock_open
+from unittest.mock import call, mock_open
 
 import pytest
-from google.cloud.texttospeech import SynthesisInput
 
-from zaphodvox.main import main
 from zaphodvox.arg_parser import parse_args
+from zaphodvox.main import main
+from zaphodvox.qwen.encoder import DEFAULT_URL
+
+
+def speech_call(text, voice_id='Ryan', url=DEFAULT_URL, language='English',
+                audio_format='wav'):
+    return call(
+        f'{url}/v1/audio/speech',
+        json={
+            'input': text,
+            'voice': voice_id,
+            'language': language,
+            'response_format': audio_format,
+        }
+    )
 
 
 class TestMain():
     def test_main(
-        self, audio_encoding, google_voice, mock_audio, mock_builtins_open,
-        mock_google, text_to_encode, tmp_path, voices_json_data
+        self, mock_audio, mock_builtins_open, mock_qwen, text_to_encode,
+        tmp_path, voices_json_data
     ):
         # Setup
         sys_args = [
-            '--encoder=google',
+            '--encoder=qwen',
             '--voice-name=voice_1',
             '--voices-file=voices.json',
             '--encode',
@@ -28,7 +41,6 @@ class TestMain():
             mock_open(read_data=text_to_encode).return_value,
             mock_open(read_data=voices_json_data).return_value,
             mock_builtins_open.return_value,
-            mock_builtins_open.return_value
         )
         mock_write = mock_builtins_open.return_value.write
 
@@ -36,28 +48,18 @@ class TestMain():
         main(sys_args)
 
         # Verify
-        # Google client
-        mock_google.client_cls.assert_called_once_with()
         # Input file
         mock_builtins_open.assert_any_call('test.txt', 'r')
         # Voices file
         mock_builtins_open.assert_any_call('voices.json', 'r')
-        # Google client synthesize_speech
-        request = {
-            'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
-            'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(audio_encoding)
-        }
-        mock_google.client.synthesize_speech.assert_called_once_with(
-            request=request
+        # Synthesis
+        mock_qwen.post.assert_called_once_with(*speech_call(text_to_encode).args,
+                                               **speech_call(text_to_encode).kwargs)
+        mock_qwen.write_bytes.assert_called_once_with(
+            tmp_path / 'test-00000.wav', b'audio'
         )
-        # Fragment file
-        mock_builtins_open.assert_any_call(
-            str(tmp_path / 'test-00000.wav'), 'wb'
-        )
-        mock_write.assert_any_call(mock_google.audio_content)
         # No silence
-        mock_audio.segment_cls.silence.assert_not_called()
+        mock_audio.segment_cls.silent.assert_not_called()
         # Concat file
         mock_audio.segment_cls.empty.assert_called_once()
         mock_audio.segment_cls.from_file.assert_called_once_with(
@@ -70,16 +72,15 @@ class TestMain():
         mock_builtins_open.assert_any_call(
             str(tmp_path / 'test-manifest.json'), 'w'
         )
-        assert mock_write.call_count == 2
-        assert mock_builtins_open.call_count == 4
+        assert mock_write.call_count == 1
+        assert mock_builtins_open.call_count == 3
 
     def test_main_manifest(
-        self, audio_encoding, google_voice, mock_audio, mock_builtins_open,
-        mock_google, manifest_json_data
+        self, mock_audio, mock_builtins_open, mock_qwen, manifest_json_data
     ):
         # Setup
         sys_args = [
-            '--encoder=google',
+            '--encoder=qwen',
             '--basename=test',
             '--encode',
             '--concat',
@@ -90,8 +91,6 @@ class TestMain():
         mock_builtins_open.side_effect = (
             mock_open(read_data=manifest_json_data).return_value,
             mock_builtins_open.return_value,
-            mock_builtins_open.return_value,
-            mock_builtins_open.return_value
         )
         mock_write = mock_builtins_open.return_value.write
 
@@ -99,28 +98,17 @@ class TestMain():
         main(sys_args)
 
         # Verify
-        # Google client
-        mock_google.client_cls.assert_called_once_with()
         # Input file
         mock_builtins_open.assert_any_call('test-manifest.json', 'r')
-        # Google client synthesize_speech
-        assert mock_google.client.synthesize_speech.call_count == 2
+        # Two text fragments (#0 and #2) synthesized
+        assert mock_qwen.post.call_count == 2
         # Fragment #0
-        request = {
-            'input': SynthesisInput(ssml='<speak>Text 0</speak>'),
-            'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(audio_encoding)
-        }
-        mock_google.client.synthesize_speech.assert_any_call(request=request)
-        mock_builtins_open.assert_any_call('test-00000.wav', 'wb')
-        assert mock_write.call_args_list[0] == call(mock_google.audio_content)
+        mock_qwen.post.assert_has_calls([speech_call('Text 0')])
+        mock_qwen.write_bytes.assert_any_call(Path('test-00000.wav'), b'audio')
         # Fragment #2
-        request['input'] = SynthesisInput(ssml='<speak>Text 2</speak>')
-        mock_google.client.synthesize_speech.assert_any_call(request=request)
-        mock_builtins_open.assert_any_call('test-00002.wav', 'wb')
-        assert mock_write.call_args_list[1] == call(mock_google.audio_content)
-        # No other google fragments
-        assert mock_google.client.synthesize_speech.call_count == 2
+        mock_qwen.post.assert_has_calls([speech_call('Text 2')])
+        mock_qwen.write_bytes.assert_any_call(Path('test-00002.wav'), b'audio')
+        assert mock_qwen.write_bytes.call_count == 2
         # Fragment #4 (silence)
         mock_audio.segment_cls.silent.assert_called_once_with(duration=42)
         mock_audio.segment.export.assert_any_call(
@@ -132,105 +120,15 @@ class TestMain():
         assert mock_audio.segment.export.call_count == 2
         # Manifest file
         mock_builtins_open.assert_any_call('test-manifest.json', 'w')
-        assert mock_write.call_count == 3
-
-    def test_main_manifest_different_encoder(
-        self, voices_json_data, manifest_json_data, elevenlabs_voice,
-        mock_builtins_open, mock_elevenlabs, mock_audio
-    ):
-        # Setup
-        sys_args = [
-            '--encoder=elevenlabs',
-            '--basename=test',
-            '--voices-file=voices.json',
-            '--silence-duration=500',
-            '--encode',
-            '--concat',
-            '--indexes=0,2-4',
-            'test-manifest.json'
-        ]
-        mock_builtins_open.side_effect = (
-            mock_open(read_data=manifest_json_data).return_value,
-            mock_open(read_data=voices_json_data).return_value,
-            mock_builtins_open.return_value
-        )
-        mock_write = mock_builtins_open.return_value.write
-
-        # Run
-        main(sys_args)
-
-        # Verify
-        # Input file
-        mock_builtins_open.assert_any_call(
-            str(Path('test-manifest.json')), 'r'
-        )
-        # Voices file
-        mock_builtins_open.assert_any_call(
-            str(Path('voices.json')), 'r'
-        )
-        # Fragment #0
-        mock_elevenlabs.from_voice_id.assert_any_call(
-            elevenlabs_voice.voice_id
-        )
-        mock_elevenlabs.voice.assert_any_call(
-            voice_id=elevenlabs_voice.voice_id,
-            settings=mock_elevenlabs.from_voice_id.return_value
-        )
-        mock_elevenlabs.generate.assert_any_call(
-            text='Text 0',
-            voice=mock_elevenlabs.voice.return_value,
-            output_format='mp3_44100_128',
-            model='eleven_multilingual_v2'
-        )
-        mock_elevenlabs.save.assert_any_call(
-            mock_elevenlabs.generate.return_value,
-            'test-00000.mp3',
-        )
-        # Fragment #2
-        mock_elevenlabs.from_voice_id.assert_any_call(
-            elevenlabs_voice.voice_id
-        )
-        mock_elevenlabs.voice.assert_any_call(
-            voice_id=elevenlabs_voice.voice_id,
-            settings=mock_elevenlabs.from_voice_id.return_value
-        )
-        mock_elevenlabs.generate.assert_any_call(
-            text='Text 2',
-            voice=mock_elevenlabs.voice.return_value,
-            output_format='mp3_44100_128',
-            model='eleven_multilingual_v2'
-        )
-        mock_elevenlabs.save.assert_any_call(
-            mock_elevenlabs.generate.return_value,
-            'test-00002.mp3',
-        )
-        # No other elevenlabs fragments
-        assert mock_elevenlabs.from_voice_id.call_count == 3
-        assert mock_elevenlabs.voice.call_count == 3
-        assert mock_elevenlabs.generate.call_count == 3
-        assert mock_elevenlabs.save.call_count == 3
-        # Fragment #4 (silence)
-        mock_audio.segment_cls.silent.assert_called_once_with(duration=500)
-        mock_audio.segment.export.assert_any_call(
-            'test-00004.mp3', format='mp3'
-        )
-        # Concat files
-        mock_audio.segment_cls.empty.assert_called_once()
-        mock_audio.segment.export.assert_has_calls([
-            call('test-00004.mp3', format='mp3'),
-            call('test.mp3', format='mp3')
-        ])
-        # Manifest file
-        mock_builtins_open.assert_any_call('test-manifest.json', 'w')
         assert mock_write.call_count == 1
 
     def test_main_manifest_no_voice(
-        self, capfd, mock_audio, mock_builtins_open, mock_google,
+        self, capfd, mock_audio, mock_builtins_open, mock_qwen,
         no_voice_manifest_json_data
     ):
         # Setup
         sys_args = [
-            '--encoder=google',
+            '--encoder=qwen',
             '--basename=test',
             '--encode',
             '--concat',
@@ -245,33 +143,23 @@ class TestMain():
             main(sys_args)
 
         # Verify
-        # Google client
-        mock_google.client_cls.assert_called_once_with()
-        # Input file
-        mock_builtins_open.assert_called_once_with(
-            str(Path('test-manifest.json')), 'r'
-        )
-        # Google client synthesize_speech not called
-        mock_google.client.synthesize_speech.assert_not_called()
-        # No silence
+        mock_builtins_open.assert_called_once_with('test-manifest.json', 'r')
+        mock_qwen.post.assert_not_called()
         mock_audio.segment_cls.silent.assert_not_called()
-        # Concat files not called
         mock_audio.segment_cls.empty.assert_not_called()
         mock_audio.segment.export.assert_not_called()
-        # Manifest file not called
         assert mock_builtins_open.call_count == 1
-        # System exit
         assert se.value.code == 1
         out, _ = capfd.readouterr()
         assert 'No voice specified' in out
 
     def test_main_manifest_incorrect_voice(
         self, capfd, incorrect_voice_manifest_json_data, mock_audio,
-        mock_builtins_open, mock_google
+        mock_builtins_open, mock_qwen
     ):
         # Setup
         sys_args = [
-            '--encoder=google',
+            '--encoder=qwen',
             '--basename=test',
             '--encode',
             '--concat',
@@ -286,115 +174,44 @@ class TestMain():
             main(sys_args)
 
         # Verify
-        # Google client
-        mock_google.client_cls.assert_called_once_with()
-        # Input file
         mock_builtins_open.assert_called_once_with('test-manifest.json', 'r')
-         # Google client synthesize_speech not called
-        mock_google.client.synthesize_speech.assert_not_called()
-        # No silence
+        mock_qwen.post.assert_not_called()
         mock_audio.segment_cls.silent.assert_not_called()
-        # Concat files not called
         mock_audio.segment_cls.empty.assert_not_called()
         mock_audio.segment.export.assert_not_called()
-        # Manifest file not called
         assert mock_builtins_open.call_count == 1
-        # System exit
         assert se.value.code == 1
         out, _ = capfd.readouterr()
         assert 'No voice specified' in out
 
-    def test_main_elevenlabs(
-        self, elevenlabs_voice, mock_audio, mock_builtins_open,
-        mock_elevenlabs, text_to_encode
-    ):
-        # Setup
-        voice_id = elevenlabs_voice.voice_id
-        sys_args = [
-            '--encoder=elevenlabs',
-            f'--voice-id={voice_id}',
-            '--encode',
-            '--concat',
-            '--delete-history',
-            'test.txt'
-        ]
-        mock_write = mock_builtins_open.return_value.write
-
-        # Run
-        main(sys_args)
-
-        # Verify
-        # Input file
-        mock_builtins_open.assert_any_call(str(Path('test.txt')), 'r')
-        # Voice
-        mock_elevenlabs.from_voice_id.assert_called_once_with(voice_id)
-        mock_elevenlabs.voice.assert_called_once_with(
-            voice_id=voice_id,
-            settings=mock_elevenlabs.from_voice_id.return_value
-        )
-        # Fragment #0
-        mock_elevenlabs.generate.assert_called_once_with(
-            text=text_to_encode,
-            voice=mock_elevenlabs.voice.return_value,
-            output_format='mp3_44100_128',
-            model='eleven_multilingual_v2'
-        )
-        mock_elevenlabs.save.assert_called_once_with(
-            mock_elevenlabs.generate.return_value, 'test-00000.mp3'
-        )
-        # No silence
-        mock_audio.segment_cls.silent.assert_not_called()
-        # Concat files
-        mock_audio.segment_cls.empty.assert_called_once()
-        mock_audio.segment_cls.from_file.assert_called_once_with(
-            'test-00000.mp3', format='mp3'
-        )
-        mock_audio.segment.export.assert_called_once_with(
-            'test.mp3', format='mp3'
-        )
-        # Manifest file
-        mock_builtins_open.assert_any_call(
-            'test-manifest.json', 'w'
-        )
-        assert mock_write.call_count == 1
-        # Delete history
-        mock_elevenlabs.history.from_api.assert_called_once_with()
-
     def test_main_encode_exception(
-        self, audio_encoding, capfd, google_voice, mock_audio, mock_builtins_open,
-        mock_google, text_to_encode
+        self, capfd, mock_audio, mock_builtins_open, mock_qwen, text_to_encode
     ):
-        error = 'encode exception'
         # Setup
+        error = 'encode exception'
         sys_args = [
-            '--encoder=google',
-            '--voice-id=A',
-            '--voice-region=UK',
+            '--encoder=qwen',
+            '--voice-id=Ryan',
             '--encode',
             '--concat',
             'test.txt'
         ]
-        mock_google.client.synthesize_speech.side_effect = Exception(error)
+        mock_qwen.response.raise_for_status.side_effect = Exception(error)
 
         # Run
         with pytest.raises(SystemExit) as se:
             main(sys_args)
 
         # Verify
-        # Google client
-        mock_google.client_cls.assert_called_once_with()
         # Input file
-        mock_builtins_open.assert_any_call(str(Path('test.txt')), 'r')
+        mock_builtins_open.assert_any_call('test.txt', 'r')
         mock_builtins_open().read.assert_called_once()
-        # Google client synthesize_speech
-        request = {
-            'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
-            'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(audio_encoding)
-        }
         # 5 tries
-        calls = [call(request=request)] * 5
-        mock_google.client.synthesize_speech.assert_has_calls(calls)
+        assert mock_qwen.post.call_count == 5
+        assert mock_qwen.post.call_args_list == [
+            speech_call(text_to_encode)
+        ] * 5
+        mock_qwen.write_bytes.assert_not_called()
         # No silence
         mock_audio.segment_cls.silent.assert_not_called()
         # Concat files not called
@@ -408,53 +225,46 @@ class TestMain():
         assert error in out
 
     def test_main_concat_exception(
-        self, audio_encoding, capfd, google_voice, mock_audio, mock_builtins_open,
-        mock_google, text_to_encode
+        self, capfd, mock_audio, mock_builtins_open, mock_qwen, text_to_encode
     ):
         # Setup
-        error  = 'from_file error'
+        error = 'export error'
         sys_args = [
-            '--encoder=google',
-            '--voice-id=A',
-            '--voice-region=UK',
+            '--encoder=qwen',
+            '--voice-id=Ryan',
             '--encode',
             '--concat',
             'test.txt'
         ]
         mock_write = mock_builtins_open.return_value.write
-        mock_audio.segment_cls.from_file.side_effect = Exception(error)
+        mock_audio.segment.export.side_effect = Exception(error)
 
         # Run
         with pytest.raises(SystemExit) as se:
             main(sys_args)
 
         # Verify
-        # Google client
-        mock_google.client_cls.assert_called_once_with()
         # Input file
-        mock_builtins_open.assert_any_call(str(Path('test.txt')), 'r')
+        mock_builtins_open.assert_any_call('test.txt', 'r')
         mock_builtins_open().read.assert_called_once()
-        # Google client synthesize_speech
-        request = {
-            'input': SynthesisInput(ssml=f'<speak>{text_to_encode}</speak>'),
-            'voice': google_voice.voice_selection_params,
-            'audio_config': google_voice.get_audio_config(audio_encoding)
-        }
-        mock_google.client.synthesize_speech.assert_called_once_with(
-            request=request
+        # Synthesis succeeded once
+        mock_qwen.post.assert_called_once_with(
+            *speech_call(text_to_encode).args,
+            **speech_call(text_to_encode).kwargs
         )
-        # Fragment file
-        mock_builtins_open.assert_any_call('test-00000.wav', 'wb'
+        mock_qwen.write_bytes.assert_called_once_with(
+            Path('test-00000.wav'), b'audio'
         )
-        mock_write.assert_any_call(mock_google.audio_content)
         # No silence
         mock_audio.segment_cls.silent.assert_not_called()
         # Concat files
         mock_audio.segment_cls.empty.assert_called_once()
-        mock_audio.segment.export.assert_not_called()
-        # Manifest file
+        mock_audio.segment.export.assert_called_once_with(
+            'test.wav', format='wav'
+        )
+        # Manifest file written before concat
         mock_builtins_open.assert_any_call('test-manifest.json', 'w')
-        assert mock_write.call_count == 2
+        assert mock_write.call_count == 1
         # System exit
         assert se.value.code == 1
         out, _ = capfd.readouterr()
@@ -471,7 +281,7 @@ class TestMain():
         # Verify
         assert se.value.code == 0
         out, _ = capfd.readouterr()
-        assert 'version 1.3.0' in out
+        assert 'version 2.0.0' in out
 
     def test_nothing_to_do(self, capfd, mock_builtins_open):
         # Setup
@@ -502,9 +312,9 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'No input file specified.' in out
 
-    def test_nonexistant_inputfile(self, capfd, mock_google):
+    def test_nonexistant_inputfile(self, capfd):
         # Setup
-        sys_args = ['--encoder=google', '--encode', 'test.txt']
+        sys_args = ['--encoder=qwen', '--encode', 'test.txt']
         args = parse_args(sys_args)
 
         # Run
@@ -512,7 +322,6 @@ class TestMain():
             main(preparsed_args=args)
 
         # Verify
-        mock_google.client_cls.assert_called_once_with()
         assert se.value.code == 1
         out, _ = capfd.readouterr()
         assert 'No such file' in out
@@ -552,7 +361,7 @@ class TestMain():
 
     def test_invalid_encoder(self, capfd, mock_builtins_open):
         # Setup
-        sys_args = ['--encoder=google', '--encode', 'test.txt']
+        sys_args = ['--encoder=qwen', '--encode', 'test.txt']
         args = parse_args(sys_args)
         args.encoder_name = 'NotARealEncoder'
 
@@ -605,11 +414,11 @@ class TestMain():
             f'{words[0]}\n\n{words[1]}\n\n'
         )
 
-    def test_plan(self, mock_builtins_open, mock_google):
+    def test_plan(self, mock_builtins_open):
         # Setup
         sys_args = [
-            '--encoder=google',
-            '--voice-id=A',
+            '--encoder=qwen',
+            '--voice-id=Ryan',
             '--plan',
             'test.txt'
         ]
@@ -618,7 +427,6 @@ class TestMain():
         main(sys_args)
 
         # Verify
-        mock_google.client_cls.assert_called_once_with()
         expected_calls = [
             call(filename, mode) for filename, mode in [
                 ('test.txt', 'r'),
@@ -627,12 +435,10 @@ class TestMain():
         ]
         assert mock_builtins_open.call_args_list == expected_calls
 
-    def test_plan_no_voice(
-        self, capfd, mock_builtins_open, mock_google, voices_json_data
-    ):
+    def test_plan_no_voice(self, capfd, mock_builtins_open, voices_json_data):
         # Setup
         sys_args = [
-            '--encoder=google',
+            '--encoder=qwen',
             '--voices-file=voices.json',
             '--plan',
             'test.txt'
@@ -648,46 +454,6 @@ class TestMain():
             main(sys_args)
 
         # Verify
-        mock_google.client_cls.assert_called_with()
         assert se.value.code == 1
         out, _ = capfd.readouterr()
-        assert (
-            'No voice specified for name "voice_null"' in
-            out
-        )
-
-    def test_delete_history(self, mock_elevenlabs):
-        # Setup
-        sys_args = [
-            '--encoder=elevenlabs',
-            '--delete-history'
-        ]
-        mock_history_item = MagicMock()
-        mock_elevenlabs.history.from_api.return_value = [mock_history_item]
-
-        # Run
-        main(sys_args)
-
-        # Verify
-        mock_elevenlabs.history.from_api.assert_called_once()
-        mock_history_item.delete.assert_called_once()
-
-    def test_google_delete_history(self, capfd, mock_google):
-        # Setup
-        sys_args = [
-            '--encoder=google',
-            '--delete-history'
-        ]
-
-        # Run
-        with pytest.raises(SystemExit) as se:
-            main(sys_args)
-
-        # Verify
-        mock_google.client_cls.assert_not_called()
-        assert se.value.code == 1
-        out, _ = capfd.readouterr()
-        assert (
-            'The "elevenlabs" encoder must be specified to delete history' in
-            out
-        )
+        assert 'No voice specified for name "voice_null"' in out

@@ -1,20 +1,17 @@
-from unittest.mock import mock_open
-
 from pathlib import Path
+from unittest.mock import mock_open
 
 from zaphodvox.main import read_voices
 
 
 class TestLoadNamedVoices():
-    def test_parse_voices_elevenlabs(
-        self, elevenlabs_voice, elevenlabs_voice_2, mock_builtins_open,
-        voices_json_data
+    def test_parse_voices(
+        self, qwen_voice, qwen_voice_2, mock_builtins_open, voices_json_data
     ):
         # Setup
         mock_builtins_open.return_value = mock_open(
             read_data=voices_json_data
         ).return_value
-
         filepath = Path('/path/to/voices.json')
 
         # Run
@@ -22,28 +19,23 @@ class TestLoadNamedVoices():
 
         # Verify
         mock_builtins_open.assert_called_once_with(str(filepath), 'r')
-        encoder_voices = voices.encoder_voices('elevenlabs')
+        encoder_voices = voices.encoder_voices()
         assert encoder_voices == {
-            'voice_1': elevenlabs_voice,
-            'voice_2': elevenlabs_voice_2
+            'voice_1': qwen_voice,
+            'voice_2': qwen_voice_2,
         }
 
-    def test_parse_voices_google(
-        self, google_voice, mock_builtins_open, voices_json_data
-    ):
-        # Setup
-        mock_builtins_open.return_value = mock_open(
-            read_data=voices_json_data
-        ).return_value
-        filepath = Path('/path/to/voices.json')
+    def test_encoder_voices_empty(self):
+        from zaphodvox.named_voices import NamedVoices
 
-        # Run
-        voices = read_voices(filepath, None)
+        assert NamedVoices().encoder_voices() == {}
 
-        # Verify
-        mock_builtins_open.assert_called_once_with(str(filepath), 'r')
-        encoder_voices = voices.encoder_voices('google')
-        assert encoder_voices == {
-            'voice_1': google_voice,
-            'voice_2': None
+    def test_add_voices(self, qwen_voice, qwen_voice_2):
+        from zaphodvox.named_voices import NamedVoices
+
+        named = NamedVoices(voices={'voice_1': qwen_voice})
+        named.add_voices({'voice_2': qwen_voice_2})
+        assert named.encoder_voices() == {
+            'voice_1': qwen_voice,
+            'voice_2': qwen_voice_2,
         }

@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, SerializeAsAny
 
-from zaphodvox.named_voices import NamedVoicesConfiguration
+from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.voice import Voice
 
 
@@ -34,7 +34,7 @@ class Manifest(BaseModel):
 
     fragments: list[Fragment] = []
     """The list of audio file fragments and their settings."""
-    voices: Optional[dict[str, NamedVoicesConfiguration]] = None
+    voices: Optional[dict[str, QwenVoice]] = None
     """The named voice configurations."""
 
     @property
@@ -61,7 +61,7 @@ class Manifest(BaseModel):
         return file_ext
 
     def set_used_voices(
-        self, voices: Optional[dict[str, NamedVoicesConfiguration]]
+        self, voices: Optional[dict[str, QwenVoice]]
     ) -> None:
         """Sets the used voices for the audio file fragments.
 

@@ -126,26 +126,27 @@ class Encoder(ABC):
         return manifest
 
     def break_tag(self, duration: int) -> Callable[[re.Match], str]:
-        """Create a function to replace multiple newlines with a break tag.
+        """Create a function to replace multiple newlines with plain-text
+        pauses. The default renders paragraph breaks as sentence stops, which
+        suits plain-text engines; subclasses may override to emit SSML.
 
         Args:
-            duration: The duration of the break in milliseconds.
+            duration: The duration of the break in milliseconds (unused by the
+                default; pauses are expressed as sentence stops).
 
         Returns:
             A function that takes a `re.Match` object and returns a string.
         """
 
         def _break_tag(match: re.Match) -> str:
-            """Replace multiple newlines with a break tag.
+            """Replace multiple newlines with plain-text sentence stops.
 
             Args:
                 match: The `re.Match` object.
 
             Returns:
-                The break tag string.
+                The pause string.
             """
-            breaks = len(match.group(1)) - 1
-            seconds = min(3.0, (breaks * duration) / 1000.0)
-            return f' <break time="{seconds:.3f}s" /> '
+            return ' . ' * (len(match.group(1)) - 1)
 
         return _break_tag

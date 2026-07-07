@@ -20,7 +20,7 @@ class TestCleanText():
 
 
 class TestTextParser():
-    def test_parse(self, google_voice, google_voice_2):
+    def test_parse(self, qwen_voice, qwen_voice_2):
         # Setup
         full_text = (
             "Paragraph 1\nZVOX: Trillian\nParagraph 2\n"
@@ -29,19 +29,19 @@ class TestTextParser():
 
         # Run
         text_fragments = parse_text(
-            full_text, voice=google_voice, voices={'Trillian': google_voice_2}
+            full_text, voice=qwen_voice, voices={'Trillian': qwen_voice_2}
         )
 
         # Verify
         assert len(text_fragments) == 3
         assert text_fragments[0].text == 'Paragraph 1'
-        assert text_fragments[0].voice == google_voice
+        assert text_fragments[0].voice == qwen_voice
         assert text_fragments[1].text == 'Paragraph 2'
-        assert text_fragments[1].voice == google_voice_2
+        assert text_fragments[1].voice == qwen_voice_2
         assert text_fragments[2].text == 'Paragraph 3'
-        assert text_fragments[2].voice == google_voice_2
+        assert text_fragments[2].voice == qwen_voice_2
 
-    def test_parse_max_chars(self, google_voice, google_voice_2):
+    def test_parse_max_chars(self, qwen_voice, qwen_voice_2):
         # Setup
         full_text = (
             "Paragraph 1\nZVOX: Trillian\nParagraph 2\n\n"
@@ -51,21 +51,21 @@ class TestTextParser():
         # Run
         text_fragments = parse_text(
             full_text,
-            voice=google_voice,
-            voices={'Trillian': google_voice_2},
+            voice=qwen_voice,
+            voices={'Trillian': qwen_voice_2},
             max_chars=30
         )
 
         # Verify
         assert len(text_fragments) == 4
         assert text_fragments[0].text == 'Paragraph 1'
-        assert text_fragments[0].voice == google_voice
+        assert text_fragments[0].voice == qwen_voice
         assert text_fragments[1].text == 'Paragraph 2\n\nParagraph 3'
-        assert text_fragments[1].voice == google_voice_2
+        assert text_fragments[1].voice == qwen_voice_2
         assert text_fragments[2].text == ''
-        assert text_fragments[2].voice == google_voice_2
+        assert text_fragments[2].voice == qwen_voice_2
         assert text_fragments[3].text == 'Paragraph 4'
-        assert text_fragments[3].voice == google_voice_2
+        assert text_fragments[3].voice == qwen_voice_2
 
     def test_encode_no_voice(self):
         with pytest.raises(ValueError):
