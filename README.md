@@ -194,6 +194,29 @@ If the `--max-chars` argument is provided, the cleaning process will guarantee t
 
 The text file will be cleaned before being encoded and concatenated into `gone-bananas.wav`. The cleaned text file (i.e. `gone-bananas-cleaned.txt`) will still be created in the current directory.
 
+### Proofing
+
+> "The ships hung in the sky in much the same way that bricks don't."
+
+Before encoding, `--proof` scans the manuscript for issues and writes a report. It is **read-only** — it never edits your text; you fix things by hand from the report (the findings carry line numbers). The deterministic checks are:
+
+- **Spelling** — words absent from the dictionary and your project wordlist, grouped by unique word (so 500 occurrences of a character's name are one entry, not 500), with suggestions.
+- **Repeated characters** — runs like `****` or `___` (stray markup or OCR artifacts).
+- **Unusual characters** — control characters, replacement characters (`U+FFFD`), zero-width and non-breaking spaces, and other gremlins.
+- **Whitespace** — trailing whitespace, tabs, and runs of blank lines.
+
+```bash
+zaphodvox --proof --dict gone-bananas.dict gone-bananas.txt
+```
+
+This writes `gone-bananas-proof.json` (and prints a table). The **project wordlist** (`--dict`, defaulting to `[basename].dict`) is a plain, version-controllable file of accepted spellings — one word per line, `#` comments allowed. When the proofer flags a real name or coined word, add it once and it stops being flagged:
+
+```bash
+zaphodvox --add-word Zaphod Beeblebrox Magrathea --dict gone-bananas.dict
+```
+
+The dictionary language defaults to `en` (override with `--dict-language`).
+
 ## Voice Configurations
 
 > "I'm so great even I get tongue-tied talking to myself."

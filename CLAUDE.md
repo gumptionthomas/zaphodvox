@@ -43,6 +43,8 @@ python -m zaphodvox.main --help    # or, if installed: zaphodvox --help
 
 There's also a standalone **`--audition N`** mode (`main.audition()`): given a preset `--voice-id` and a sample sentence, it synthesizes `N` candidate reference clips across seeds `0..N-1` (candidate `k` uses seed `k`) so the best take can be adopted as a clone anchor. It reuses `encode_manifest()` by building a synthetic `Manifest` of `N` same-text fragments with per-seed `QwenVoice`s, writes a `*-audition.json` index, and prints a table. The companion **`--adopt SEED`** mode (`main.adopt()`) reads that index (the inputfile), builds a clone `QwenVoice` from the chosen candidate (carrying its `ref_text`/`seed`/`temperature`), and adds/updates it under `--voice-name` in `--voices-file`. Both are mutually exclusive with the other action flags.
 
+A separate **`--proof`** mode (`main.proof()`) runs read-only deterministic checks over the manuscript — spelling (via `dictionary.py` / `pyspellchecker` + a project wordlist), repeated/unusual characters, and whitespace (all in `proof.py`, returning a `ProofReport` of `ProofFinding`s) — and writes a `*-proof.json` report plus a table. It never edits the text. The companion **`--add-word`** mode appends accepted spellings to the `--dict` wordlist. (A local-LLM proofreading layer for contextual/structural issues is planned as a follow-up; per project rule, any LLM must be local — never cloud.)
+
 If no action flag is given, the program prints a quip and exits 0 (`handle_version_and_ntd`). All exceptions bubble to `main()`'s top-level handler, which prints a red error and exits 1.
 
 ## Key architectural concepts
