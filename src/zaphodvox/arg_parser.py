@@ -215,6 +215,20 @@ def parse_args(args: list) -> Namespace:
         default='en',
         help='The spell-check dictionary language (default: en)'
     )
+    proof_group.add_argument(
+        '--llm-url',
+        default=os.environ.get('ZAPHODVOX_LLM_URL'),
+        help=(
+            'Base URL of a local OpenAI-compatible LLM server (e.g. LM Studio) '
+            'to add contextual proofreading (default: $ZAPHODVOX_LLM_URL; '
+            'omit to skip the LLM pass)'
+        )
+    )
+    proof_group.add_argument(
+        '--llm-model',
+        default=None,
+        help='The LLM model id to use (default: the server\'s loaded model)'
+    )
     parser.add_argument(
         '--concat-out',
         type=Path,
