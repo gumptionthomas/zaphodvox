@@ -132,7 +132,13 @@ zaphodvox --encoder=qwen --voice-id=Ryan \
 
 This writes `ryan-audition-00.wav` … `ryan-audition-04.wav` (the basename defaults to the voice name), plus a `ryan-audition.json` index, and prints a table of the candidates. `--voice-instruct` and `--voice-temperature` apply to every candidate (only the seed varies), so audition at the same temperature you plan to encode with. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used.
 
-Listen to the candidates and adopt the one you like — either as a clone anchor (`--voice-ref-audio=refs/ryan-audition-02.wav --voice-ref-text="<the audition text>"`), which is the most consistent, or by reusing its seed on the preset (`--voice-id=Ryan --voice-seed=2`). Auditioning is its own mode and can't be combined with `--encode`/`--plan`/`--concat`.
+Listen to the candidates and adopt the one you like with `--adopt`, giving it a name and a voices file to write to (the audition index is the inputfile):
+
+```bash
+zaphodvox --adopt=2 --voice-name=Narrator --voices-file=voices.json refs/ryan-audition.json
+```
+
+This adds (or updates) a `Narrator` clone voice in `voices.json` that references the chosen candidate clip, carrying over its `ref_text`, `seed`, and `temperature` from the audition. From then on, `ZVOX: Narrator` (or `--voice-name=Narrator`) reads with that voice. `--voice-seed`/`--voice-temperature` override the carried-over values if given. Auditioning and adopting are each their own mode and can't be combined with `--encode`/`--plan`/`--concat`.
 
 ### Concatenation
 

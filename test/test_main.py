@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import call, mock_open
 
@@ -6,6 +7,16 @@ import pytest
 from zaphodvox.arg_parser import parse_args
 from zaphodvox.main import main
 from zaphodvox.qwen.encoder import DEFAULT_URL
+
+
+AUDITION_INDEX = json.dumps([
+    {'seed': 0, 'filename': 'ryan-audition-00.wav', 'voice_id': 'Ryan',
+     'instruct': 'calm', 'language': 'English', 'temperature': 0.6,
+     'text': 'Sample reference line for the narrator voice.'},
+    {'seed': 1, 'filename': 'ryan-audition-01.wav', 'voice_id': 'Ryan',
+     'instruct': 'calm', 'language': 'English', 'temperature': 0.6,
+     'text': 'Sample reference line for the narrator voice.'},
+])
 
 
 def speech_call(text, voice_id='Ryan', url=DEFAULT_URL, language='English',
@@ -589,3 +600,87 @@ class TestAudition():
             main(['--encoder=qwen', '--voice-id=Ryan', '--audition=2'])
         assert se.value.code == 1
         assert 'No audition text specified' in capfd.readouterr()[0]
+
+
+class TestAdopt():
+    def test_adopt_creates_voices_file(self, mock_builtins_open):
+        # Setup: adopt candidate seed 1; the voices file does not exist yet.
+        mock_builtins_open.side_effect = (
+            mock_open(read_data=AUDITION_INDEX).return_value,  # index read
+            FileNotFoundError(),                               # voices missing
+            mock_builtins_open.return_value,                   # voices write
+        )
+        mock_write = mock_builtins_open.return_value.write
+        sys_args = [
+            '--adopt=1',
+            '--voice-name=Narrator',
+            '--voices-file=voices.json',
+            'refs/ryan-audition.json',
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: a clone entry is written, resolving the clip beside the index.
+        mock_builtins_open.assert_any_call('voices.json', 'w')
+        written = json.loads(mock_write.call_args[0][0])
+        assert written == {
+            'voices': {
+                'Narrator': {
+                    'language': 'English',
+                    'ref_audio': 'refs/ryan-audition-01.wav',
+                    'ref_text': 'Sample reference line for the narrator voice.',
+                    'seed': 1,
+                    'temperature': 0.6,
+                }
+            }
+        }
+
+    def test_adopt_merges_into_existing(self, mock_builtins_open):
+        # Setup: an existing voices file with another voice.
+        existing = json.dumps(
+            {'voices': {'Ford': {'voice_id': 'Dylan', 'language': 'English'}}}
+        )
+        mock_builtins_open.side_effect = (
+            mock_open(read_data=AUDITION_INDEX).return_value,
+            mock_open(read_data=existing).return_value,
+            mock_builtins_open.return_value,
+        )
+        mock_write = mock_builtins_open.return_value.write
+
+        # Run
+        main([
+            '--adopt=0', '--voice-name=Narrator',
+            '--voices-file=voices.json', 'ryan-audition.json'
+        ])
+
+        # Verify: both the old and new voices are present.
+        written = json.loads(mock_write.call_args[0][0])
+        assert set(written['voices']) == {'Ford', 'Narrator'}
+        assert written['voices']['Narrator']['ref_audio'] == (
+            'ryan-audition-00.wav'
+        )
+
+    def test_adopt_seed_not_found(self, capfd, mock_builtins_open):
+        mock_builtins_open.return_value = mock_open(
+            read_data=AUDITION_INDEX
+        ).return_value
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--adopt=9', '--voice-name=Narrator',
+                '--voices-file=voices.json', 'ryan-audition.json'
+            ])
+        assert se.value.code == 1
+        assert 'No audition candidate for seed 9' in capfd.readouterr()[0]
+
+    def test_adopt_requires_voice_name(self, capfd, mock_builtins_open):
+        with pytest.raises(SystemExit) as se:
+            main(['--adopt=1', '--voices-file=voices.json', 'idx.json'])
+        assert se.value.code == 1
+        assert '--adopt requires --voice-name' in capfd.readouterr()[0]
+
+    def test_adopt_requires_voices_file(self, capfd, mock_builtins_open):
+        with pytest.raises(SystemExit) as se:
+            main(['--adopt=1', '--voice-name=Narrator', 'idx.json'])
+        assert se.value.code == 1
+        assert '--adopt requires --voices-file' in capfd.readouterr()[0]

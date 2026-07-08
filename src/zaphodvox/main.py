@@ -44,6 +44,11 @@ def main(
                 args.basename = args.voice_id.lower()
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
+
+        if args.adopt is not None:
+            adopt(args, text, console)
+            return
+
         args.named_voices = read_voices(args.voices_file, manifest)
         args.indexes = args.indexes if manifest else None
 
@@ -89,11 +94,12 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
     encode: bool = args.encode
     concat: bool = args.concat
     audition: bool = bool(args.audition)
+    adopt: bool = args.adopt is not None
 
     if args.version:
         console.print(f'{Path(sys.argv[0]).stem}, version {__version__}')
         sys.exit(0)
-    if not any([clean, plan, encode, concat, audition]):
+    if not any([clean, plan, encode, concat, audition, adopt]):
         console.print(
             "[italic dim]Nothing to do... I'd give you advice, "
             "but you wouldn't listen. No one ever does.[/italic dim]"
@@ -133,6 +139,15 @@ def validate(args: Namespace) -> None:
             )
         if not (args.audition_text or inputfile):
             raise ValueError('No audition text specified.')
+    if args.adopt is not None:
+        if any([args.clean, args.plan, encode, args.concat, audition]):
+            raise ValueError('--adopt cannot be combined with other actions.')
+        if not inputfile:
+            raise ValueError('--adopt requires an audition index inputfile.')
+        if not args.voice_name:
+            raise ValueError('--adopt requires --voice-name.')
+        if not args.voices_file:
+            raise ValueError('--adopt requires --voices-file.')
 
 
 def encoder_voice(
@@ -361,14 +376,67 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     for seed, fragment in enumerate(fragments):
         table.add_row(str(seed), fragment.filename)
     console.print(table)
-    first = fragments[0].filename
     console.print(
-        'Adopt one, e.g. seed 0:\n'
-        f'  as a clone anchor:  --voice-ref-audio={first} '
-        '--voice-ref-text="<audition text>"\n'
-        f'  or reuse its seed:  --voice-id={voice_id} --voice-seed=0'
+        'Adopt the one you like as a clone voice, e.g. seed 0:\n'
+        f'  zaphodvox --adopt 0 --voice-name <name> --voices-file voices.json '
+        f'{index_fp}'
     )
     console.print(f'[dim]Index written to {index_fp}[/dim]')
+
+
+def adopt(args: Namespace, text: str, console: Console) -> None:
+    """Adopts an audition candidate as a clone voice in a voices file.
+
+    Reads the audition index (the inputfile), builds a `QwenVoice` that clones
+    the candidate for the requested seed, and adds/updates it under
+    `--voice-name` in `--voices-file` (created if it does not exist).
+
+    Args:
+        args: The parsed command-line arguments.
+        text: The audition index JSON (the inputfile contents).
+        console: The `Console` object.
+
+    Raises:
+        ValueError: If no candidate matches the requested seed.
+    """
+    seed: int = args.adopt
+    voice_name: str = args.voice_name
+    voices_file: Path = args.voices_file
+
+    index = json.loads(text)
+    entry = next((e for e in index if e.get('seed') == seed), None)
+    if entry is None:
+        raise ValueError(f'No audition candidate for seed {seed}.')
+
+    inputfile: Path = args.inputfile
+    ref_audio = str(inputfile.parent / entry['filename'])
+    voice = QwenVoice(
+        ref_audio=ref_audio,
+        ref_text=entry.get('text'),
+        language=entry.get('language', 'English'),
+        seed=args.voice_seed if args.voice_seed is not None else seed,
+        temperature=(
+            args.voice_temperature if args.voice_temperature is not None
+            else entry.get('temperature')
+        ),
+    )
+
+    named = NamedVoices()
+    try:
+        with open(str(voices_file), 'r') as f:
+            named = NamedVoices.model_validate_json(f.read())
+    except FileNotFoundError:
+        pass
+    voices = dict(named.voices or {})
+    existed = voice_name in voices
+    voices[voice_name] = voice
+    named.voices = voices
+    with open(str(voices_file), 'w') as f:
+        f.write(named.model_dump_json(indent=4, exclude_none=True))
+
+    verb = 'Updated' if existed else 'Added'
+    console.print(f'{verb} voice "{voice_name}" in {voices_file}:')
+    console.print(voice.model_dump_json(indent=4, exclude_none=True))
 
 
 def read_text_manifest(
