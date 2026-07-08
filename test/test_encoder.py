@@ -183,6 +183,40 @@ class TestEncoder():
         assert 'voice_file' in kwargs['files']
         mock_qwen.write_bytes.assert_called_once_with(filepath, b'audio')
 
+    def test_encode_preset_seed(self, mock_qwen, tmp_path):
+        # A seeded preset voice sends the seed in the JSON payload.
+        voice = QwenVoice(voice_id='Ryan', seed=42)
+
+        QwenEncoder().t2s('Hello', voice, tmp_path / 'out.wav')
+
+        mock_qwen.post.assert_called_once_with(
+            f'{DEFAULT_URL}/v1/audio/speech',
+            json={
+                'input': 'Hello',
+                'voice': 'Ryan',
+                'language': 'English',
+                'response_format': 'wav',
+                'seed': 42,
+            }
+        )
+
+    def test_encode_clone_seed(self, mock_qwen, tmp_path):
+        # A seeded clone voice sends the seed as a (string) form field.
+        ref = tmp_path / 'ref.wav'
+        ref.write_text('reference-audio')
+        voice = QwenVoice(ref_audio=str(ref), seed=42)
+
+        QwenEncoder().t2s('Clone me', voice, tmp_path / 'out.wav')
+
+        _, kwargs = mock_qwen.post.call_args
+        assert kwargs['data'] == {
+            'input': 'Clone me',
+            'language': 'English',
+            'response_format': 'wav',
+            'x_vector_only': 'true',
+            'seed': '42',
+        }
+
     def test_encode_retries(self, mock_qwen, tmp_path):
         # Setup: the server errors on every attempt.
         mock_qwen.response.raise_for_status.side_effect = Exception('boom')

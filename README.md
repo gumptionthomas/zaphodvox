@@ -107,6 +107,14 @@ The audio output format is `wav` by default. Use `--qwen-audio-format` to select
 zaphodvox --encoder=qwen --voice-id=Ryan --qwen-audio-format=mp3 --encode gone-bananas.txt
 ```
 
+By default each fragment is synthesized non-deterministically, so a voice can drift in timbre and pacing from chunk to chunk. Pin a fixed RNG seed with `--voice-seed` to keep a voice consistent across every fragment (and across re-encodes). Combining it with a larger `--max-chars` gives the steadiest results:
+
+```bash
+zaphodvox --encoder=qwen --voice-id=Ryan --voice-seed=42 --max-chars=500 --encode gone-bananas.txt
+```
+
+The seed is stored with the voice in the manifest, so re-encoding a fragment reproduces the same audio. (Requires a Qwen3-TTS server that accepts a `seed` parameter.)
+
 ### Concatenation
 
 To combine the individual fragment audio files into one, add the `--concat` argument:
@@ -234,6 +242,7 @@ The fields are:
 - `instruct`: An optional style/emotion direction for a preset voice (e.g. `calm, wry`). Ignored for cloned voices.
 - `ref_audio`: The path to a reference audio file to clone. Mutually exclusive with `voice_id`.
 - `ref_text`: The transcript of `ref_audio`. If set, the higher-quality in-context (ICL) clone mode is used; otherwise a true zero-shot clone is used.
+- `seed`: An optional fixed RNG seed. When set, every fragment using this voice is synthesized from the same seed, keeping the voice consistent across chunks and across re-encodes. Defaults to non-deterministic.
 
 A preset example:
 
@@ -241,7 +250,8 @@ A preset example:
 {
     "voice_id": "Eric",
     "language": "English",
-    "instruct": "depressed, morose"
+    "instruct": "depressed, morose",
+    "seed": 42
 }
 ```
 

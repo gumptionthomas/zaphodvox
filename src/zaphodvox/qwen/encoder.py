@@ -97,7 +97,7 @@ class QwenEncoder(Encoder):
             voice: The preset `QwenVoice` to use.
             filepath: The `Path` of the generated audio file.
         """
-        payload = {
+        payload: dict = {
             'input': text,
             'voice': voice.voice_id,
             'language': voice.language,
@@ -105,6 +105,8 @@ class QwenEncoder(Encoder):
         }
         if voice.instruct:
             payload['instruct'] = voice.instruct
+        if voice.seed is not None:
+            payload['seed'] = voice.seed
         with requests.post(
             f'{self._url}/v1/audio/speech', json=payload
         ) as r:
@@ -131,6 +133,8 @@ class QwenEncoder(Encoder):
             data['ref_text'] = voice.ref_text
         else:
             data['x_vector_only'] = 'true'
+        if voice.seed is not None:
+            data['seed'] = str(voice.seed)
         with open(voice.ref_audio, 'rb') as ref:
             with requests.post(
                 f'{self._url}/v1/audio/speech/upload',

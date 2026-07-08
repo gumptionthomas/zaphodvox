@@ -212,6 +212,15 @@ def parse_args(args: list) -> Namespace:
         )
     )
     qwen_group.add_argument(
+        '--voice-seed',
+        type=int,
+        default=None,
+        help=(
+            'A fixed RNG seed for reproducible synthesis; keeps the voice '
+            'consistent across chunks (default: non-deterministic)'
+        )
+    )
+    qwen_group.add_argument(
         '--qwen-url',
         default=os.environ.get('ZAPHODVOX_QWEN_URL', DEFAULT_URL),
         help=(
