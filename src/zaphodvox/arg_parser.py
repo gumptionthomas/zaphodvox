@@ -168,6 +168,17 @@ def parse_args(args: list) -> Namespace:
         )
     )
     parser.add_argument(
+        '--adopt',
+        type=int,
+        default=None,
+        metavar='SEED',
+        help=(
+            'Adopt the audition candidate with the given seed (from an '
+            'audition index inputfile) as a clone voice named --voice-name '
+            'in --voices-file'
+        )
+    )
+    parser.add_argument(
         '--concat-out',
         type=Path,
         default=None,
