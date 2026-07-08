@@ -1,16 +1,19 @@
+import json
 import sys
 from argparse import Namespace
 from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
+from rich.table import Table
 
 from zaphodvox import __version__
 from zaphodvox.audio import concat_files
 from zaphodvox.encoder import Encoder
-from zaphodvox.manifest import Manifest
+from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.named_voices import NamedVoices
 from zaphodvox.arg_parser import parse_args
+from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import clean_text, parse_text
 from zaphodvox.voice import Voice
 
@@ -34,12 +37,19 @@ def main(
     try:
         validate(args)
 
-        if not args.basename and args.inputfile:
-            args.basename = args.inputfile.stem
+        if not args.basename:
+            if args.inputfile:
+                args.basename = args.inputfile.stem
+            elif args.voice_id:
+                args.basename = args.voice_id.lower()
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
         args.named_voices = read_voices(args.voices_file, manifest)
         args.indexes = args.indexes if manifest else None
+
+        if args.audition:
+            audition(args, text, console)
+            return
 
         if args.clean and not manifest:
             text = clean(args, text)
@@ -78,11 +88,12 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
     plan: bool = args.plan
     encode: bool = args.encode
     concat: bool = args.concat
+    audition: bool = bool(args.audition)
 
     if args.version:
         console.print(f'{Path(sys.argv[0]).stem}, version {__version__}')
         sys.exit(0)
-    if not any([clean, plan, encode, concat]):
+    if not any([clean, plan, encode, concat, audition]):
         console.print(
             "[italic dim]Nothing to do... I'd give you advice, "
             "but you wouldn't listen. No one ever does.[/italic dim]"
@@ -102,11 +113,26 @@ def validate(args: Namespace) -> None:
     inputfile: Optional[Path] = args.inputfile
     encoder_name: Optional[str] = args.encoder_name
     encode: bool = args.encode
+    audition: Optional[int] = args.audition
 
-    if not inputfile:
+    if not (inputfile or audition):
         raise ValueError('No input file specified.')
-    if encode and not encoder_name:
+    if (encode or audition) and not encoder_name:
         raise ValueError('No encoder specified.')
+    if audition:
+        if any([args.clean, args.plan, args.encode, args.concat]):
+            raise ValueError(
+                '--audition cannot be combined with other actions.'
+            )
+        if not args.voice_id:
+            raise ValueError('Auditioning requires a preset "--voice-id".')
+        if args.voice_ref_audio:
+            raise ValueError(
+                'Auditioning generates reference clips; do not supply '
+                '"--voice-ref-audio".'
+            )
+        if not (args.audition_text or inputfile):
+            raise ValueError('No audition text specified.')
 
 
 def encoder_voice(
@@ -251,6 +277,94 @@ def concat(args: Namespace, manifest: Manifest) -> None:
     filename = f'{basename}.{file_ext}'
     concat_out = file_path(concat_out, filename, out_dir)
     concat_files(out_dir or Path(), manifest, file_ext, concat_out)
+
+
+AUDITION_MIN_CHARS = 120
+"""A soft minimum audition-text length (~10s of speech) below which a warning
+is shown, since short clips make poor clone references."""
+
+
+def audition(args: Namespace, text: str, console: Console) -> None:
+    """Synthesizes several candidate reference clips of a preset voice, one per
+        seed, so the best-sounding take can be adopted as a clone reference.
+
+    Args:
+        args: The parsed command-line arguments.
+        text: The input file text, used for the sample sentence when
+            `--audition-text` is not given.
+        console: The `Console` object.
+
+    Raises:
+        ValueError: If no audition text can be determined.
+    """
+    basename: str = args.basename
+    count: int = args.audition
+    encoder: Encoder = args.encoder
+    instruct: Optional[str] = args.voice_instruct
+    language: str = args.voice_language
+    out_dir: Optional[Path] = args.out_dir
+    voice_id: str = args.voice_id
+
+    audition_text = args.audition_text or next(
+        (line.strip() for line in text.split('\n') if line.strip()), ''
+    )
+    if not audition_text:
+        raise ValueError('No audition text specified.')
+    if len(audition_text) < AUDITION_MIN_CHARS:
+        console.print(
+            '[yellow]Warning: the audition text is short; aim for ~10-15s of '
+            f'speech ({AUDITION_MIN_CHARS}+ characters) for a good clone '
+            'reference.[/yellow]'
+        )
+
+    file_ext = encoder.file_extension
+    fragments = [
+        Fragment(
+            text=audition_text,
+            filename=f'{basename}-audition-{seed:02}.{file_ext}',
+            voice=QwenVoice(
+                voice_id=voice_id, language=language,
+                instruct=instruct, seed=seed
+            )
+        )
+        for seed in range(count)
+    ]
+    encoder.encode_manifest(Manifest(fragments=fragments), encode_dir=out_dir)
+
+    index = [
+        {
+            'seed': seed,
+            'filename': fragment.filename,
+            'voice_id': voice_id,
+            'instruct': instruct,
+            'language': language,
+            'text': audition_text,
+        }
+        for seed, fragment in enumerate(fragments)
+    ]
+    index_fp = file_path(None, f'{basename}-audition.json', out_dir)
+    with open(str(index_fp), 'w') as f:
+        f.write(json.dumps(index, indent=4))
+
+    header = f'Auditioning "{voice_id}"'
+    if instruct:
+        header += f'  ·  instruct: "{instruct}"'
+    header += f'  ·  {language}'
+    console.print(header)
+    table = Table()
+    table.add_column('seed', justify='right')
+    table.add_column('file')
+    for seed, fragment in enumerate(fragments):
+        table.add_row(str(seed), fragment.filename)
+    console.print(table)
+    first = fragments[0].filename
+    console.print(
+        'Adopt one, e.g. seed 0:\n'
+        f'  as a clone anchor:  --voice-ref-audio={first} '
+        '--voice-ref-text="<audition text>"\n'
+        f'  or reuse its seed:  --voice-id={voice_id} --voice-seed=0'
+    )
+    console.print(f'[dim]Index written to {index_fp}[/dim]')
 
 
 def read_text_manifest(

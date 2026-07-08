@@ -486,3 +486,85 @@ class TestMain():
         assert se.value.code == 1
         out, _ = capfd.readouterr()
         assert 'No voice specified for name "voice_null"' in out
+
+
+class TestAudition():
+    def test_audition(self, mock_qwen, mock_builtins_open):
+        # Setup: three candidates of a preset voice, no input file.
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-id=Ryan',
+            '--audition=3',
+            '--audition-text=A sufficiently long sample sentence for the '
+            'narrator so the reference clip is a usable length for cloning.',
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: one request per seed 0..2, each carrying its seed.
+        assert mock_qwen.post.call_count == 3
+        seeds = [c.kwargs['json']['seed'] for c in mock_qwen.post.call_args_list]
+        assert seeds == [0, 1, 2]
+        # Candidate files are named by seed (basename defaults to the voice id).
+        for seed in range(3):
+            mock_qwen.write_bytes.assert_any_call(
+                Path(f'ryan-audition-0{seed}.wav'), b'audio'
+            )
+        assert mock_qwen.write_bytes.call_count == 3
+        # The index file is written.
+        mock_builtins_open.assert_any_call('ryan-audition.json', 'w')
+
+    def test_audition_uses_inputfile_text(self, mock_qwen, mock_builtins_open):
+        # Setup: no --audition-text, so the input file's first line is used.
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-id=Ryan',
+            '--audition=1',
+            'sample.txt',
+        ]
+        mock_builtins_open.side_effect = (
+            mock_open(read_data='First line is the sample.\nSecond.').return_value,
+            mock_builtins_open.return_value,
+        )
+
+        # Run
+        main(sys_args)
+
+        # Verify: synthesized the first line; basename comes from the inputfile.
+        assert mock_qwen.post.call_args.kwargs['json']['input'] == (
+            'First line is the sample.'
+        )
+        mock_qwen.write_bytes.assert_called_once_with(
+            Path('sample-audition-00.wav'), b'audio'
+        )
+
+    def test_audition_requires_voice_id(self, capfd, mock_qwen):
+        with pytest.raises(SystemExit) as se:
+            main(['--encoder=qwen', '--audition=2', '--audition-text=hello'])
+        assert se.value.code == 1
+        assert 'requires a preset' in capfd.readouterr()[0]
+
+    def test_audition_rejects_clone(self, capfd, mock_qwen):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--voice-id=Ryan', '--voice-ref-audio=ref.wav',
+                '--audition=2', '--audition-text=hello'
+            ])
+        assert se.value.code == 1
+        assert 'do not supply' in capfd.readouterr()[0]
+
+    def test_audition_rejects_other_actions(self, capfd, mock_qwen):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--voice-id=Ryan', '--audition=2',
+                '--audition-text=hello', '--encode', 'test.txt'
+            ])
+        assert se.value.code == 1
+        assert 'cannot be combined' in capfd.readouterr()[0]
+
+    def test_audition_no_text(self, capfd, mock_qwen):
+        with pytest.raises(SystemExit) as se:
+            main(['--encoder=qwen', '--voice-id=Ryan', '--audition=2'])
+        assert se.value.code == 1
+        assert 'No audition text specified' in capfd.readouterr()[0]
