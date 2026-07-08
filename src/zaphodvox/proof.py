@@ -51,6 +51,21 @@ class ProofReport(BaseModel):
     findings: list[ProofFinding] = []
     """The individual findings."""
 
+    @classmethod
+    def from_findings(cls, findings: list[ProofFinding]) -> 'ProofReport':
+        """Builds a report from findings, computing the summary by type.
+
+        Args:
+            findings: The findings to include.
+
+        Returns:
+            The `ProofReport`.
+        """
+        summary: dict[str, int] = {}
+        for finding in findings:
+            summary[finding.type] = summary.get(finding.type, 0) + 1
+        return cls(summary=summary, findings=findings)
+
 
 def check_spelling(
     lines: list[str], speller: SpellChecker
@@ -223,7 +238,4 @@ def proof_text(text: str, speller: SpellChecker) -> ProofReport:
         + check_unusual_chars(lines)
         + check_whitespace(lines)
     )
-    summary: dict[str, int] = {}
-    for finding in findings:
-        summary[finding.type] = summary.get(finding.type, 0) + 1
-    return ProofReport(summary=summary, findings=findings)
+    return ProofReport.from_findings(findings)

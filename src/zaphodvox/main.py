@@ -14,7 +14,8 @@ from zaphodvox.encoder import Encoder
 from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.named_voices import NamedVoices
 from zaphodvox.arg_parser import parse_args
-from zaphodvox.proof import proof_text
+from zaphodvox.llm import LLMClient, proofread
+from zaphodvox.proof import ProofReport, proof_text
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import clean_text, parse_text
 from zaphodvox.voice import Voice
@@ -502,7 +503,11 @@ def proof(args: Namespace, text: str, console: Console) -> None:
     out_dir: Optional[Path] = args.out_dir
 
     speller = build_speller(args.dict_language, load_words(dict_path))
-    report = proof_text(text, speller)
+    findings = proof_text(text, speller).findings
+    if args.llm_url:
+        client = LLMClient(args.llm_url, args.llm_model)
+        findings += proofread(text, client)
+    report = ProofReport.from_findings(findings)
     report.source_file = str(args.inputfile)
 
     fp = file_path(args.proof_out, f'{basename}-proof.json', out_dir)

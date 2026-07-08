@@ -217,6 +217,16 @@ zaphodvox --add-word Zaphod Beeblebrox Magrathea --dict gone-bananas.dict
 
 The dictionary language defaults to `en` (override with `--dict-language`).
 
+#### LLM-assisted proofreading
+
+The deterministic checks above catch mechanical issues, but not contextual ones. Point `--llm-url` at a local [OpenAI-compatible](https://platform.openai.com/docs/api-reference/chat) LLM server (e.g. [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/)) to add a proofreading pass that also flags homophones (their/there), doubled words, garbled sentences, and inconsistent chapter headers:
+
+```bash
+zaphodvox --proof --llm-url=http://127.0.0.1:1234 --llm-model=qwen2.5-7b-instruct book.txt
+```
+
+These findings are merged into the same report with `source: "llm"`. Only a **local** LLM is ever contacted — no cloud service is used. The pass is skipped unless `--llm-url` (or the `ZAPHODVOX_LLM_URL` environment variable) is set. Like the deterministic checks, it is advisory: nothing is changed automatically.
+
 ## Voice Configurations
 
 > "I'm so great even I get tongue-tied talking to myself."

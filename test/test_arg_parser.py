@@ -47,6 +47,8 @@ class TestArgParser():
         assert args.dict is None
         assert args.add_word is None
         assert args.dict_language == 'en'
+        assert args.llm_url is None
+        assert args.llm_model is None
 
     def test_encoder_choice(self):
         args = parse_args(['--encoder=qwen', 'test.txt'])

@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from unittest.mock import call, mock_open
+from unittest.mock import call, mock_open, patch
 
 import pytest
 
@@ -754,3 +754,22 @@ class TestProof():
             main(['--proof', '--clean', 'book.txt'])
         assert se.value.code == 1
         assert '--proof cannot be combined' in capfd.readouterr()[0]
+
+    def test_proof_with_llm(self, tmp_path, monkeypatch):
+        # The LLM findings are merged into the report as source "llm".
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text('Their were four of them.\n')
+        completion = {'choices': [{'message': {'content': json.dumps(
+            {'findings': [{'line': 1, 'category': 'homophone',
+                           'excerpt': 'Their were', 'message': 'wrong',
+                           'suggestion': 'There were'}]}
+        )}}]}
+
+        with patch('zaphodvox.llm.requests') as mock_requests:
+            response = mock_requests.post.return_value.__enter__.return_value
+            response.json.return_value = completion
+            main(['--proof', '--llm-url', 'http://host:1234', 'book.txt'])
+
+        report = json.loads((tmp_path / 'book-proof.json').read_text())
+        assert any(f['source'] == 'llm' for f in report['findings'])
+        assert report['summary'].get('proofread') == 1
