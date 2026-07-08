@@ -225,7 +225,7 @@ The deterministic checks above catch mechanical issues, but not contextual ones.
 zaphodvox --proof --llm-url=http://127.0.0.1:1234 --llm-model=qwen2.5-7b-instruct book.txt
 ```
 
-These findings are merged into the same report with `source: "llm"`. Only a **local** LLM is ever contacted — no cloud service is used. The pass is skipped unless `--llm-url` (or the `ZAPHODVOX_LLM_URL` environment variable) is set. Like the deterministic checks, it is advisory: nothing is changed automatically.
+These findings are merged into the same report with `source: "llm"`. Only a **local** LLM is ever contacted — no cloud service is used. The pass is skipped unless `--llm-url` (or the `ZAPHODVOX_LLM_URL` environment variable) is set; `--llm-model` defaults to the `ZAPHODVOX_LLM_MODEL` environment variable when not given. Like the deterministic checks, it is advisory: nothing is changed automatically.
 
 ## Voice Configurations
 
