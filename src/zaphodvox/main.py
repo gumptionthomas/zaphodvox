@@ -42,6 +42,8 @@ def main(
                 args.basename = args.inputfile.stem
             elif args.voice_id:
                 args.basename = args.voice_id.lower()
+            elif args.voice_description:
+                args.basename = 'design'
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
 
@@ -130,12 +132,20 @@ def validate(args: Namespace) -> None:
             raise ValueError(
                 '--audition cannot be combined with other actions.'
             )
-        if not args.voice_id:
-            raise ValueError('Auditioning requires a preset "--voice-id".')
         if args.voice_ref_audio:
             raise ValueError(
                 'Auditioning generates reference clips; do not supply '
                 '"--voice-ref-audio".'
+            )
+        if not (args.voice_id or args.voice_description):
+            raise ValueError(
+                'Auditioning requires a preset "--voice-id" or a '
+                '"--voice-description".'
+            )
+        if args.voice_id and args.voice_description:
+            raise ValueError(
+                'Specify either "--voice-id" or "--voice-description", not '
+                'both.'
             )
         if not (args.audition_text or inputfile):
             raise ValueError('No audition text specified.')
@@ -300,8 +310,9 @@ is shown, since short clips make poor clone references."""
 
 
 def audition(args: Namespace, text: str, console: Console) -> None:
-    """Synthesizes several candidate reference clips of a preset voice, one per
-        seed, so the best-sounding take can be adopted as a clone reference.
+    """Synthesizes several candidate reference clips of a preset or designed
+        voice, one per seed, so the best-sounding take can be adopted as a
+        clone reference.
 
     Args:
         args: The parsed command-line arguments.
@@ -314,12 +325,13 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     """
     basename: str = args.basename
     count: int = args.audition
+    description: Optional[str] = args.voice_description
     encoder: Encoder = args.encoder
     instruct: Optional[str] = args.voice_instruct
     language: str = args.voice_language
     out_dir: Optional[Path] = args.out_dir
     temperature: Optional[float] = args.voice_temperature
-    voice_id: str = args.voice_id
+    voice_id: Optional[str] = args.voice_id
 
     audition_text = args.audition_text or next(
         (line.strip() for line in text.split('\n') if line.strip()), ''
@@ -333,15 +345,23 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             'reference.[/yellow]'
         )
 
+    def candidate_voice(seed: int) -> QwenVoice:
+        if description:
+            return QwenVoice(
+                description=description, language=language,
+                seed=seed, temperature=temperature
+            )
+        return QwenVoice(
+            voice_id=voice_id, language=language,
+            instruct=instruct, seed=seed, temperature=temperature
+        )
+
     file_ext = encoder.file_extension
     fragments = [
         Fragment(
             text=audition_text,
             filename=f'{basename}-audition-{seed:02}.{file_ext}',
-            voice=QwenVoice(
-                voice_id=voice_id, language=language,
-                instruct=instruct, seed=seed, temperature=temperature
-            )
+            voice=candidate_voice(seed)
         )
         for seed in range(count)
     ]
@@ -352,6 +372,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             'seed': seed,
             'filename': fragment.filename,
             'voice_id': voice_id,
+            'description': description,
             'instruct': instruct,
             'language': language,
             'temperature': temperature,
@@ -363,9 +384,12 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     with open(str(index_fp), 'w') as f:
         f.write(json.dumps(index, indent=4))
 
-    header = f'Auditioning "{voice_id}"'
-    if instruct:
-        header += f'  ·  instruct: "{instruct}"'
+    if description:
+        header = f'Auditioning designed voice: "{description}"'
+    else:
+        header = f'Auditioning "{voice_id}"'
+        if instruct:
+            header += f'  ·  instruct: "{instruct}"'
     if temperature is not None:
         header += f'  ·  temp: {temperature}'
     header += f'  ·  {language}'

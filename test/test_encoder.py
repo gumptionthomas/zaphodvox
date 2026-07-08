@@ -252,6 +252,29 @@ class TestEncoder():
             'temperature': '0.6',
         }
 
+    def test_encode_design(self, mock_qwen, tmp_path):
+        # A designed voice posts to the design endpoint with voice_description.
+        voice = QwenVoice(
+            description='a warm elderly woman', seed=7, temperature=0.6
+        )
+
+        QwenEncoder().t2s('Hello', voice, tmp_path / 'out.wav')
+
+        mock_qwen.post.assert_called_once_with(
+            f'{DEFAULT_URL}/v1/audio/speech/design',
+            json={
+                'input': 'Hello',
+                'voice_description': 'a warm elderly woman',
+                'language': 'English',
+                'response_format': 'wav',
+                'seed': 7,
+                'temperature': 0.6,
+            }
+        )
+        mock_qwen.write_bytes.assert_called_once_with(
+            tmp_path / 'out.wav', b'audio'
+        )
+
     def test_encode_retries(self, mock_qwen, tmp_path):
         # Setup: the server errors on every attempt.
         mock_qwen.response.raise_for_status.side_effect = Exception('boom')
@@ -282,10 +305,20 @@ class TestEncoder():
         with pytest.raises(ValueError, match='Not a QwenVoice'):
             QwenEncoder().t2s('Hello', Voice(), tmp_path / 'out.wav')
 
-    def test_qwen_voice_requires_preset_or_clone(self):
+    def test_qwen_voice_requires_a_source(self):
         with pytest.raises(ValidationError):
             QwenVoice()
+
+    def test_qwen_voice_exactly_one_source(self):
+        with pytest.raises(ValidationError):
+            QwenVoice(voice_id='Ryan', ref_audio='ref.wav')
+        with pytest.raises(ValidationError):
+            QwenVoice(voice_id='Ryan', description='a narrator')
 
     def test_qwen_voice_is_clone(self):
         assert QwenVoice(voice_id='Ryan').is_clone is False
         assert QwenVoice(ref_audio='ref.wav').is_clone is True
+
+    def test_qwen_voice_is_design(self):
+        assert QwenVoice(description='a calm narrator').is_design is True
+        assert QwenVoice(voice_id='Ryan').is_design is False
