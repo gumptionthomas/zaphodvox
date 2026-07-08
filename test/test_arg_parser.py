@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from zaphodvox.arg_parser import parse_args
+from zaphodvox.qwen.encoder import DEFAULT_URL
 
 
 class TestArgParser():
@@ -24,43 +25,48 @@ class TestArgParser():
         assert args.basename is None
         assert args.indexes is None
         assert not args.clean
+        assert not args.plan
         assert not args.encode
         assert not args.concat
         assert args.concat_out is None
         assert args.save_manifest is True
         assert args.manifest_out is None
-        assert not args.delete_history
-        # Google
-        assert args.voice_language == 'en'
-        assert args.voice_region == 'US'
-        assert args.voice_type == 'Wavenet'
-        assert args.voice_speaking_rate is None
-        assert args.voice_pitch is None
-        assert args.voice_volume_gain_db is None
-        assert args.voice_sample_rate_hertz is None
-        assert args.voice_effects_profile_id is None
-        assert args.google_audio_format == 'linear16'
-        assert args.service_account is None
-        # ElevenLabs
-        assert args.voice_model == 'eleven_multilingual_v2'
-        assert args.voice_stability is None
-        assert args.voice_similarity_boost is None
-        assert args.voice_style is None
-        assert args.voice_use_speaker_boost is None
-        assert args.elevenlabs_audio_format == 'mp3_44100_128'
-        assert args.api_key is None
+        # Qwen
+        assert args.voice_language == 'English'
+        assert args.voice_instruct is None
+        assert args.voice_ref_audio is None
+        assert args.voice_ref_text is None
+        assert args.qwen_url == DEFAULT_URL
+        assert args.qwen_audio_format == 'wav'
 
-    def test_parser_scalar(self):
-        sys_args = ['--voice-stability=0.5', 'test.txt']
+    def test_encoder_choice(self):
+        args = parse_args(['--encoder=qwen', 'test.txt'])
+        assert args.encoder_name == 'qwen'
+
+    def test_qwen_options(self):
+        sys_args = [
+            '--voice-id=Serena',
+            '--voice-language=Chinese',
+            '--voice-instruct=calm, wry',
+            '--voice-ref-audio=ref.wav',
+            '--voice-ref-text=hello',
+            '--qwen-url=http://localhost:9999',
+            '--qwen-audio-format=mp3',
+            'test.txt',
+        ]
         args = parse_args(sys_args)
-        assert args.voice_stability == 0.5
+        assert args.voice_id == 'Serena'
+        assert args.voice_language == 'Chinese'
+        assert args.voice_instruct == 'calm, wry'
+        assert args.voice_ref_audio == Path('ref.wav')
+        assert args.voice_ref_text == 'hello'
+        assert args.qwen_url == 'http://localhost:9999'
+        assert args.qwen_audio_format == 'mp3'
 
-    def test_parser_large_scalar(self):
-        sys_args = ['--voice-stability=42.42', 'test.txt']
+    def test_invalid_encoder_choice(self):
         with (pytest.raises(SystemExit), redirect_stderr(StringIO())):
-            parse_args(sys_args)
+            parse_args(['--encoder=google', 'test.txt'])
 
-    def test_parser_small_scalar(self):
-        sys_args = ['--voice-stability=-42.42', 'test.txt']
+    def test_invalid_audio_format(self):
         with (pytest.raises(SystemExit), redirect_stderr(StringIO())):
-            parse_args(sys_args)
+            parse_args(['--qwen-audio-format=ogg', 'test.txt'])

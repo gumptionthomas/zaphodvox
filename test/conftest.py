@@ -4,10 +4,8 @@ from typing import Iterator
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
-from google.cloud.texttospeech import AudioEncoding
 
-from zaphodvox.e11labs.voice import ElevenLabsVoice
-from zaphodvox.googlecloud.voice import GoogleVoice
+from zaphodvox.qwen.voice import QwenVoice
 
 
 @pytest.fixture
@@ -16,53 +14,26 @@ def text_to_encode() -> str:
 
 
 @pytest.fixture
-def audio_encoding() -> int:
-    return AudioEncoding.LINEAR16
+def qwen_voice() -> QwenVoice:
+    return QwenVoice(voice_id='Ryan')
 
 
 @pytest.fixture
-def google_voice() -> GoogleVoice:
-    return GoogleVoice(
-        voice_id='A',
-        language='en',
-        region='UK',
-        type='Wavenet'
-    )
+def qwen_voice_2() -> QwenVoice:
+    return QwenVoice(voice_id='Serena')
 
 
 @pytest.fixture
-def google_voice_2() -> GoogleVoice:
-    return GoogleVoice(
-        voice_id='C',
-        language='en',
-        region='UK',
-        type='Wavenet'
-    )
+def qwen_clone_voice() -> QwenVoice:
+    return QwenVoice(ref_audio='ref.wav', ref_text='hello')
 
 
 @pytest.fixture
-def elevenlabs_voice() -> ElevenLabsVoice:
-    return ElevenLabsVoice(voice_id='Ford')
-
-
-@pytest.fixture
-def elevenlabs_voice_2() -> ElevenLabsVoice:
-    return ElevenLabsVoice(voice_id='Trillian')
-
-
-@pytest.fixture
-def voices_data(
-    google_voice, elevenlabs_voice, elevenlabs_voice_2
-) -> dict:
+def voices_data(qwen_voice, qwen_voice_2) -> dict:
     return {
         'voices': {
-            'voice_1': {
-                'google': google_voice.model_dump(),
-                'elevenlabs': elevenlabs_voice.model_dump()
-            },
-            'voice_2': {
-                'elevenlabs': elevenlabs_voice_2.model_dump()
-            }
+            'voice_1': qwen_voice.model_dump(),
+            'voice_2': qwen_voice_2.model_dump(),
         }
     }
 
@@ -74,26 +45,18 @@ def voices_json_data(voices_data) -> str:
 
 @pytest.fixture
 def fragments_data() -> list[dict]:
-    # Fragments #0 to #3 are regular text
+    # Fragments #0 to #3 are regular text, #4 is silence.
     fragments: list[dict] = [
         {
             'text': f'Text {i}',
             'filename': f'test-{i:05}.wav',
-            'voice': {
-                'voice_id': 'A',
-                'language': 'en',
-                'region': 'US',
-                'type': 'Wavenet'
-            },
             'voice_name': 'voice_1',
-            'encoder': 'google',
-            'audio_format': 'linear16',
-            'silence_duration': None
+            'encoder': 'qwen',
+            'audio_format': 'wav',
+            'silence_duration': None,
         } for i in range(5)
     ]
-    # Fragment #4 is silence
     fragments[4]['text'] = ''
-    fragments[4]['voice'] = None
     fragments[4]['voice_name'] = None
     fragments[4]['silence_duration'] = 500
     return fragments
@@ -109,31 +72,46 @@ def manifest_json_data(voices_data, fragments_data) -> str:
 @pytest.fixture
 def no_voice_manifest_json_data(text_to_encode) -> str:
     return json.dumps({
-    'fragments': [{
+        'fragments': [{
             'text': text_to_encode,
             'filename': 'test-00000.wav',
-            'encoder': 'google',
-            'audio_format': 'linear16',
-            'silence_duration': None
+            'encoder': 'qwen',
+            'audio_format': 'wav',
+            'silence_duration': None,
         }]
     })
 
 
 @pytest.fixture
-def incorrect_voice_manifest_json_data(
-    elevenlabs_voice, elevenlabs_voice_2, text_to_encode
-) -> str:
+def inline_voice_manifest_json_data(qwen_voice, text_to_encode) -> str:
+    # The fragment carries an inline voice (no voice_name, no voices map), so
+    # it must be re-encodable without re-specifying a voice.
     return json.dumps({
         'fragments': [{
-                'text': text_to_encode,
-                'filename': 'test-00000.wav',
-                'voice': elevenlabs_voice_2.model_dump(),
-                'voice_name': 'voice_1',
-                'encoder': 'google',
-                'audio_format': 'linear16',
-                'silence_duration': None
+            'text': text_to_encode,
+            'filename': 'test-00000.wav',
+            'voice': qwen_voice.model_dump(),
+            'encoder': 'qwen',
+            'audio_format': 'wav',
+            'silence_duration': None,
+        }]
+    })
+
+
+@pytest.fixture
+def incorrect_voice_manifest_json_data(qwen_voice, text_to_encode) -> str:
+    # The fragment references a voice name ("voice_2") that is not present in
+    # the manifest voices, so it cannot be resolved.
+    return json.dumps({
+        'fragments': [{
+            'text': text_to_encode,
+            'filename': 'test-00000.wav',
+            'voice_name': 'voice_2',
+            'encoder': 'qwen',
+            'audio_format': 'wav',
+            'silence_duration': None,
         }],
-        'voices': {'voice_1': {'elevenlabs': elevenlabs_voice.model_dump()}}
+        'voices': {'voice_1': qwen_voice.model_dump()},
     })
 
 
@@ -159,40 +137,27 @@ def mock_audio() -> Iterator[tuple[MagicMock, MagicMock]]:
         yield MockAudio(segment_cls, segment)
 
 
-MockGoogle = namedtuple(
-    'MockGoogle', ['client_cls', 'client', 'audio_content']
+MockQwen = namedtuple(
+    'MockQwen', ['requests', 'post', 'response', 'content', 'write_bytes']
 )
 
 
 @pytest.fixture
-def mock_google() -> Iterator[MockGoogle]:
-    with patch(
-        'zaphodvox.googlecloud.encoder.TextToSpeechClient'
-    ) as client_cls:
-        client = client_cls.return_value
-        client_cls.from_service_account_file.return_value = client
-        mock_response = client.synthesize_speech.return_value
-        mock_response.audio_content = b'audio'
-        yield MockGoogle(client_cls, client, mock_response.audio_content)
-
-
-MockElevenlabs = namedtuple(
-    'MockElevenlabs',
-    ['history', 'save', 'generate', 'voice', 'from_voice_id', 'set_api_key']
-)
-
-
-@pytest.fixture
-def mock_elevenlabs() -> Iterator[MockElevenlabs]:
+def mock_qwen() -> Iterator[MockQwen]:
     with (
-        patch('zaphodvox.e11labs.encoder.History') as history,
-        patch('zaphodvox.e11labs.encoder.save') as save,
-        patch('zaphodvox.e11labs.encoder.generate') as generate,
-        patch('zaphodvox.e11labs.encoder.ElevenLabsVoice') as voice,
-        patch('zaphodvox.e11labs.voice.VoiceSettings.from_voice_id') as fvid,
-        patch('zaphodvox.e11labs.encoder.set_api_key') as sak
+        patch('zaphodvox.qwen.encoder.requests') as mock_requests,
+        patch('pathlib.Path.write_bytes', autospec=True) as mock_write_bytes,
     ):
-        yield MockElevenlabs(history, save, generate, voice, fvid, sak)
+        response = MagicMock()
+        response.content = b'audio'
+        mock_requests.post.return_value.__enter__.return_value = response
+        yield MockQwen(
+            mock_requests,
+            mock_requests.post,
+            response,
+            response.content,
+            mock_write_bytes,
+        )
 
 
 MockProgressBar = namedtuple('MockProgressBar', ['audio', 'encoder'])

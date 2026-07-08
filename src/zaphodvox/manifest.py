@@ -1,10 +1,10 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, SerializeAsAny
+from pydantic import BaseModel, SerializeAsAny, field_validator
 
-from zaphodvox.named_voices import NamedVoicesConfiguration
+from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.voice import Voice
 
 
@@ -19,6 +19,24 @@ class Fragment(BaseModel):
     """The `Voice` settings for the speech."""
     voice_name: Optional[str] = None
     """The name of the voice used for the speech."""
+
+    @field_validator('voice', mode='before')
+    @classmethod
+    def _coerce_voice(cls, value: Any) -> Any:
+        """Deserializes a raw voice mapping into a concrete `QwenVoice` so an
+        inline (unnamed) manifest voice round-trips instead of collapsing to a
+        fieldless base `Voice`. Instances are passed through unchanged.
+
+        Args:
+            value: The raw `voice` field value (a mapping from JSON, a `Voice`
+                instance, or `None`).
+
+        Returns:
+            A `QwenVoice` if given a mapping, otherwise `value` unchanged.
+        """
+        if isinstance(value, dict):
+            return QwenVoice.model_validate(value)
+        return value
     silence_duration: Optional[int] = None
     """The duration of the silence in seconds for empty lines."""
     encoder: Optional[str] = None
@@ -34,7 +52,7 @@ class Manifest(BaseModel):
 
     fragments: list[Fragment] = []
     """The list of audio file fragments and their settings."""
-    voices: Optional[dict[str, NamedVoicesConfiguration]] = None
+    voices: Optional[dict[str, QwenVoice]] = None
     """The named voice configurations."""
 
     @property
@@ -61,7 +79,7 @@ class Manifest(BaseModel):
         return file_ext
 
     def set_used_voices(
-        self, voices: Optional[dict[str, NamedVoicesConfiguration]]
+        self, voices: Optional[dict[str, QwenVoice]]
     ) -> None:
         """Sets the used voices for the audio file fragments.
 

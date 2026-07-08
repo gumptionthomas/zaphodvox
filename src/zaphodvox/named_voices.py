@@ -2,62 +2,25 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from zaphodvox.e11labs.voice import ElevenLabsVoice
-from zaphodvox.googlecloud.voice import GoogleVoice
-from zaphodvox.alltalk.voice import AllTalkVoice
+from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.voice import Voice
 
 
-class NamedVoicesConfiguration(BaseModel):
-    """A named voice configuration."""
-
-    google: Optional[GoogleVoice] = None
-    """A `GoogleVoice` configuration."""
-    elevenlabs: Optional[ElevenLabsVoice] = None
-    """An `ElevenLabsVoice` configuration."""
-    alltalk: Optional[AllTalkVoice] = None
-    """An `AllTalkVoice` configuration."""
-
-    def encoder_voice(self, encoder_name: str) -> Optional[Voice]:
-        """Returns the voice for the given encoder name.
-
-        Args:
-            encoder_name: The encoder name.
-
-        Returns:
-            The voice for the encoder name.
-        """
-        return getattr(self, encoder_name, None)
-
-
 class NamedVoices(BaseModel):
-    """A dictionary of named voice configurations."""
+    """A dictionary of named `QwenVoice` configurations."""
 
-    voices: Optional[dict[str, NamedVoicesConfiguration]] = None
+    voices: Optional[dict[str, QwenVoice]] = None
     """The named voice configurations."""
 
-    def encoder_voices(
-        self, encoder_name: Optional[str]
-    ) -> dict[str, Optional[Voice]]:
-        """Returns the named voices for the given encoder name.
-
-        Args:
-            encoder_name: The encoder name.
+    def encoder_voices(self) -> dict[str, Optional[Voice]]:
+        """Returns the named voices as a name/`Voice` mapping.
 
         Returns:
-            The name/`Voice` pairs for the encoder name.
+            The name/`Voice` pairs.
         """
-        voices: dict[str, Optional[Voice]] = {}
-        if self.voices and encoder_name:
-            voices = {
-                k: v.encoder_voice(encoder_name)
-                for k, v in self.voices.items()
-            }
-        return voices
+        return dict(self.voices) if self.voices else {}
 
-    def add_voices(
-        self, voices: Optional[dict[str, NamedVoicesConfiguration]]
-    ) -> None:
+    def add_voices(self, voices: Optional[dict[str, QwenVoice]]) -> None:
         """Adds the given voices into this instance.
 
         Args:

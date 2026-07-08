@@ -1,6 +1,6 @@
 # zaphodvox
 
-The `zaphodvox` python package provides a command-line interface for encoding a text file into synthetic speech audio using either the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) or the [ElevenLabs Speech Synthesis API](https://elevenlabs.io/docs).
+The `zaphodvox` python package provides a command-line interface for encoding a text file into synthetic speech audio using a locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server (for example, the [qwen3-tts-api](https://github.com/cornball-ai/qwen3-tts-api) server, which wraps the open-weight Qwen3-TTS models).
 
 ## Installation
 
@@ -24,23 +24,20 @@ Successfully uninstalled zaphodvox...
 
 `zaphodvox` also requires a current installation of [ffmpeg](https://ffmpeg.org/).
 
-## Authorization
+## Qwen3-TTS Server
 
 > "He didn't know why he had become President of the Galaxy, except that it seemed a fun thing to be."
 
-Authorization credentials are required for both the Google Text-To-Speech APIs and the ElevenLabs Speech Synthesis APIs. These can be specified either by defining environment variables or using CLI arguments.
+`zaphodvox` does no synthesis itself. It talks to a locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server that exposes an OpenAI-style speech API, so you must have one running before encoding.
 
-### Google Authorization
+The server needs to expose two endpoints:
 
-The Google encoder requires that you set up an account, project, and service account JSON key as described in the ["Before You Begin"](https://cloud.google.com/text-to-speech/docs/before-you-begin) documentation.
+- `POST /v1/audio/speech` for built-in preset speakers.
+- `POST /v1/audio/speech/upload` for zero-shot voice cloning.
 
-You can set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the downloaded service account file path or you can pass the file path directly to the CLI with the `--service-account` argument.
+The reference implementation is [qwen3-tts-api](https://github.com/cornball-ai/qwen3-tts-api). Follow its own README to install and run it; the models want an NVIDIA GPU, so a CUDA-capable card is effectively a prerequisite for the server (not for `zaphodvox`). No API keys or authentication are involved, as the server is expected to be local and trusted.
 
-### ElevenLabs Authorization
-
-The ElevenLabs encoder requires that you set up an account and generate an API key as described in the ["Authentication"](https://elevenlabs.io/docs/api-reference/text-to-speech#authentication) section of the [API Reference documentation](https://elevenlabs.io/docs/api-reference/text-to-speech).
-
-You can set the `ELEVEN_API_KEY` environment variable to the API key copied from your profile page or you can pass the key directly to the CLI with the `--api-key` argument.
+By default `zaphodvox` talks to the server at `http://127.0.0.1:4123`. Override the base URL with the `--qwen-url` argument or the `ZAPHODVOX_QWEN_URL` environment variable.
 
 ## Usage
 
@@ -56,16 +53,16 @@ Some examples using the following text file (`gone-bananas.txt`):
 
 ```text
 This is the first line of text.
-This is the next line. By default, each line of text is sent to the API individually.
+This is the next line. By default, each line of text is sent to the server individually.
 This is the last line. And this is a sentence that is split
 between lines. Ideally, these parts of the sentence would be on the same line.
 ```
 
 ```bash
-zaphodvox --encoder=google --voice-id=A --encode gone-bananas.txt
+zaphodvox --encoder=qwen --voice-id=Ryan --encode gone-bananas.txt
 ```
 
-Running the above command will encode the text file using the [Google Text-to-Speech API](https://cloud.google.com/text-to-speech/docs) with the `en-US-Wavenet-A` voice. This will result in the following fragment audio files being created in the current directory (one file for each line of text):
+Running the above command will encode the text file with the locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server using the `Ryan` preset speaker. This will result in the following fragment audio files being created in the current directory (one file for each line of text):
 
 ```console
 gone-bananas-00000.wav ["This is the first line..."]
@@ -76,12 +73,46 @@ gone-bananas-00003.wav ["between lines. Ideally, these..."]
 
 In addition to the audio files, a manifest JSON file (`gone-bananas-manifest.json`) will also be written to the current directory. This file contains information about the fragment audio files encoded, including the text, the relative file name, and the voice used. This manifest file can also be used as input to the command rather than a text file. See the [manifest documentation](#manifest) for more information.
 
+### Voices: Presets and Clones
+
+A Qwen voice is either a built-in **preset speaker** or a zero-shot **clone** of a reference audio file. `--voice-id` (preset) and `--voice-ref-audio` (clone) are mutually exclusive.
+
+To use a **preset speaker**, pass its name to `--voice-id`. The available speakers are `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, and `Sohee`. You can optionally steer the delivery with `--voice-instruct` and set the language with `--voice-language`:
+
+```bash
+zaphodvox --encoder=qwen --voice-id=Eric --voice-instruct="depressed, morose" --encode gone-bananas.txt
+```
+
+The default language is `English`. Other supported values are `Chinese`, `Japanese`, `Korean`, `German`, `French`, `Russian`, `Portuguese`, `Spanish`, and `Italian`:
+
+```bash
+zaphodvox --encoder=qwen --voice-id=Dylan --voice-language=French --encode gone-bananas.txt
+```
+
+To **clone a voice**, pass a reference audio file to `--voice-ref-audio` instead of a `--voice-id`:
+
+```bash
+zaphodvox --encoder=qwen --voice-ref-audio=trillian-sample.wav --encode gone-bananas.txt
+```
+
+Without a transcript, this performs a true zero-shot clone. If you also provide the transcript of the reference audio via `--voice-ref-text`, the server uses the higher-quality in-context (ICL) clone mode:
+
+```bash
+zaphodvox --encoder=qwen --voice-ref-audio=trillian-sample.wav --voice-ref-text="Well, hello there." --encode gone-bananas.txt
+```
+
+The audio output format is `wav` by default. Use `--qwen-audio-format` to select `wav` or `mp3`:
+
+```bash
+zaphodvox --encoder=qwen --voice-id=Ryan --qwen-audio-format=mp3 --encode gone-bananas.txt
+```
+
 ### Concatenation
 
 To combine the individual fragment audio files into one, add the `--concat` argument:
 
 ```bash
-zaphodvox --encoder=google --voice-id=A --encode --concat gone-bananas.txt
+zaphodvox --encoder=qwen --voice-id=Ryan --encode --concat gone-bananas.txt
 ```
 
 An additional audio file, `gone-bananas.wav`, will be saved in the current directory.
@@ -99,7 +130,7 @@ This command will convert the text file to plain text and attempt to add an extr
 ```text
 This is the first line of text. It should probably be a paragraph.
 
-This is the next line. By default, each line of text is sent to the API individually.
+This is the next line. By default, each line of text is sent to the server individually.
 
 This is the last line. And this is a sentence that is split between lines. Ideally, these parts of the sentence would be on the same line.
 ```
@@ -107,15 +138,15 @@ This is the last line. And this is a sentence that is split between lines. Ideal
 Encode this new file:
 
 ```bash
-zaphodvox --encoder=google --voice-id=A --encode --concat gone-bananas-cleaned.txt
+zaphodvox --encoder=qwen --voice-id=Ryan --encode --concat gone-bananas-cleaned.txt
 ```
 
-Notice that there's 500ms of silence (the default) generated for each empty newline and that the last sentence is no longer split between lines.
+Notice that a pause is generated for each empty newline and that the last sentence is no longer split between lines.
 
 The `--clean` and `--encode` arguments can be combined in a single call:
 
 ```bash
-zaphodvox --encoder=google --voice-id=A --clean --encode --concat gone-bananas.txt
+zaphodvox --encoder=qwen --voice-id=Ryan --clean --encode --concat gone-bananas.txt
 ```
 
 If the `--max-chars` argument is provided, the cleaning process will guarantee that every line is less than `max-chars` characters by splitting long lines at sentence boundaries.
@@ -134,41 +165,23 @@ This is an example voice configuration file (`voices.json`):
 {
     "voices": {
         "Marvin": {
-            "google": {
-                "voice_id": "A",
-                "language": "en",
-                "region": "US",
-                "type": "Neural2"
-            },
-            "elevenlabs": {
-                "voice_id": "EXAVITQu4vr4xnSDxMaL"
-            }
+            "voice_id": "Eric",
+            "language": "English",
+            "instruct": "depressed, morose"
         },
         "Ford": {
-            "google": {
-                "voice_id": "D",
-                "language": "en",
-                "region": "GB",
-                "type": "Wavenet"
-            },
-            "elevenlabs": {
-                "voice_id": "TxGEqnHWrfWFTfGW9XjX"
-            }
+            "voice_id": "Dylan",
+            "language": "English"
         },
         "Trillian": {
-            "google": {
-                "voice_id": "C",
-                "language": "en",
-                "region": "GB",
-                "type": "Wavenet"
-            },
-            "elevenlabs": {
-                "voice_id": "EeMfvkfxDAepqPVNPE8M"
-            }
+            "ref_audio": "trillian-sample.wav",
+            "ref_text": "Well, hello there."
         }
     }
 }
 ```
+
+Each named voice maps directly to the [Qwen voice](#qwen-voice-configuration) fields.
 
 If a `--voices-file` is used, inline `ZVOX: [name]` tags in a text `inputfile` can specify the voice(s) to be used.
 
@@ -176,83 +189,68 @@ A example multi-voice text file (`heart-of-gold.txt`):
 
 ```text
 ZVOX: Marvin
-This text will be spoken by the Marvin voice defined in the voices JSON file. That is, it will use either the
-specified Google voice (i.e. "en-US-F-Wavenet") or ElevenLabs voice (i.e. voice ID "EXAVITQu4vr4xnSDxMaL")
-depending on which encoder is used.
+This text will be spoken by the Marvin voice defined in the voices JSON file. That is, it will use the
+"Eric" preset speaker with a "depressed, morose" instruction.
 
 ZVOX: Ford
-This line will be spoken by the Ford voice. That is, it will use either the specified Google voice
-(i.e. "en-US-D-Wavenet") or ElevenLabs voice (i.e. voice ID "TxGEqnHWrfWFTfGW9XjX") depending on which
-encoder is used.
+This line will be spoken by the Ford voice. That is, it will use the "Dylan" preset speaker.
 
 This paragraph will also be spoken by the Ford voice as it is still the "current" voice.
 
-ZVOX: Trillian // This is a UK female voice
-Finally, this will be read by the Trillian voice. Note that text following a space after the voice name will be ignored.
+ZVOX: Trillian // This is a cloned voice
+Finally, this will be read by the Trillian voice, cloned from "trillian-sample.wav". Note that text following a space after the voice name will be ignored.
 If a line contains the "ZVOX" tag, it will not be synthesized to speech.
 ```
 
 ```bash
-zaphodvox --voices-file=voices.json --encoder=google --encode heart-of-gold.txt
+zaphodvox --voices-file=voices.json --encoder=qwen --encode heart-of-gold.txt
 ```
 
 The above command will result in the following fragment audio files to be created in the current directory:
 
 ```console
-heart-of-gold-00000.wav ["This text will be spoken by the..." using "Marvin" google voice]
-heart-of-gold-00001.wav [500ms silence]
-heart-of-gold-00002.wav ["This line will be spoken by the..." using "Ford" google voice]
-heart-of-gold-00003.wav [500ms silence]
-heart-of-gold-00004.wav ["This paragraph will also..." using "Ford" google voice]
-heart-of-gold-00005.wav [500ms silence]
-heart-of-gold-00006.wav ["Finally, this will be read by the..." using "Trillian" google voice]
-heart-of-gold-00007.wav ["If a line contains the..." using "Trillian" google voice]
+heart-of-gold-00000.wav ["This text will be spoken by the..." using "Marvin" voice]
+heart-of-gold-00001.wav [silence]
+heart-of-gold-00002.wav ["This line will be spoken by the..." using "Ford" voice]
+heart-of-gold-00003.wav [silence]
+heart-of-gold-00004.wav ["This paragraph will also..." using "Ford" voice]
+heart-of-gold-00005.wav [silence]
+heart-of-gold-00006.wav ["Finally, this will be read by the..." using "Trillian" voice]
+heart-of-gold-00007.wav ["If a line contains the..." using "Trillian" voice]
 ```
 
-### JSON Voice Configurations
+### Qwen Voice Configuration
 
 > "He preferred people to be puzzled rather than contemptuous."
 
-The JSON voice configurations for both Google and ElevenLabs follow the CLI "voice" arguments fairly closely. One difference is that CLI defaults don't necessarily apply in all cases.
+The JSON voice configuration follows the CLI "voice" arguments fairly closely. One difference is that CLI defaults don't necessarily apply in all cases.
 
-#### Google Voice Configuration
+A voice is either a **preset** (a built-in speaker named by `voice_id`) or a **clone** (a zero-shot clone of the reference audio at `ref_audio`). Exactly one of `voice_id` or `ref_audio` is required.
 
-See the Google documentation for [Supported Voices](https://cloud.google.com/text-to-speech/docs/voices), [Voice Selection Params](https://cloud.google.com/python/docs/reference/texttospeech/latest/google.cloud.texttospeech_v1.types.VoiceSelectionParams), and [Audio Config](https://cloud.google.com/python/docs/reference/texttospeech/latest/google.cloud.texttospeech_v1.types.AudioConfig) for more detailed information on the individual settings.
+The fields are:
 
-The required settings are `voice_id`, `language`, `region`, and `type`. All other settings will default to their underlying Google defaults.
+- `voice_id`: The built-in preset speaker name (one of `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, `Sohee`). Mutually exclusive with `ref_audio`.
+- `language`: The language of the text (defaults to `English`).
+- `instruct`: An optional style/emotion direction for a preset voice (e.g. `calm, wry`). Ignored for cloned voices.
+- `ref_audio`: The path to a reference audio file to clone. Mutually exclusive with `voice_id`.
+- `ref_text`: The transcript of `ref_audio`. If set, the higher-quality in-context (ICL) clone mode is used; otherwise a true zero-shot clone is used.
 
-Example:
+A preset example:
 
 ```json
 {
-    "voice_id": "D",
-    "language": "en",
-    "region": "GB",
-    "type": "Wavenet",
-    "speaking_rate": null,
-    "pitch": null,
-    "volume_gain_db": null,
-    "sample_rate_hertz": null,
-    "effects_profile_id": null
+    "voice_id": "Eric",
+    "language": "English",
+    "instruct": "depressed, morose"
 }
 ```
 
-#### ElevenLabs Voice Configuration
-
-See the ElevenLabs documentation for [Voice Lab](https://elevenlabs.io/docs/voicelab/overview), [Models](https://elevenlabs.io/docs/speech-synthesis/models), and [Voice Settings](https://elevenlabs.io/docs/speech-synthesis/voice-settings) for more detailed information on the individual settings.
-
-The only required setting is `voice_id`. All other settings will default to the underlying ElevenLabs defaults for the selected voice.
-
-Example:
+A clone example:
 
 ```json
 {
-    "voice_id": "EXAVITQu4vr4xnSDxMaL",
-    "model": null,
-    "stability": null,
-    "similarity_boost": null,
-    "style": null,
-    "use_speaker_boost": null
+    "ref_audio": "trillian-sample.wav",
+    "ref_text": "Well, hello there."
 }
 ```
 
@@ -260,7 +258,7 @@ Example:
 
 > “If I ever meet myself, I'll hit myself so hard I won't know what's hit me.”
 
-A manifest JSON file is created during the encoding process and can be used as the inputfile instead of a text file. If a manifest file is used, the fragment audio files to be re-encoded can be specified with the `--manifest-indexes` argument.
+A manifest JSON file is created during the encoding process and can be used as the inputfile instead of a text file. If a manifest file is used, the fragment audio files to be re-encoded can be specified with the `--indexes` argument.
 
 For example, consider this simple text file (`towel.txt`):
 
@@ -272,7 +270,7 @@ And always know where it is.
 The file is encoded with this command:
 
 ```bash
-zaphodvox --encoder=google --voice-id=A --encode towel.txt
+zaphodvox --encoder=qwen --voice-id=Ryan --encode towel.txt
 ```
 
 Three files will be created in the current directory: the two fragment audio files (`towel-00000.wav` and `towel-00001.wav`) and the manifest file (`towel-manifest.json`).
@@ -287,28 +285,24 @@ Here are the contents of `towel-manifest.json`:
         "filename": "towel-00000.wav",
         "voice":
         {
-            "voice_id": "A",
-            "language": "en",
-            "region": "US",
-            "type": "Wavenet"
+            "voice_id": "Ryan",
+            "language": "English"
         },
         "silence_duration": null,
-        "encoder": "google",
-        "audio_format": "linear16"
+        "encoder": "qwen",
+        "audio_format": "wav"
     },
     {
         "text": "And always know where it is.",
         "filename": "towel-00001.wav",
         "voice":
         {
-            "voice_id": "A",
-            "language": "en",
-            "region": "US",
-            "type": "Wavenet"
+            "voice_id": "Ryan",
+            "language": "English"
         },
         "silence_duration": null,
-        "encoder": "google",
-        "audio_format": "linear16"
+        "encoder": "qwen",
+        "audio_format": "wav"
     }
 ]
 ```
@@ -320,7 +314,7 @@ Changes can be made to fragment `text`, `filename`, or `voice` items and the mod
 For example, if the second fragment's `text` field is modified to remove the initial "And", this command will re-encode only the second fragment audio file in place (i.e. `towel-00001.wav`):
 
 ```bash
-zaphodvox --encoder=google --encode --manifest-indexes=1 towel-manifest.json
+zaphodvox --encoder=qwen --encode --indexes=1 towel-manifest.json
 ```
 
 The `--concat` argument can also be added when using a manifest file as input. In this case, an attempt will be made to concatenate both the unmodified and newly encoded fragment audio files into one. If any of the files specified in the manifest is missing, the concatenation will fail.
@@ -328,7 +322,7 @@ The `--concat` argument can also be added when using a manifest file as input. I
 A manifest plan can be created from a text file using the `--plan` argument:
 
 ```bash
-zaphodvox --encoder=google --voice-id=A --plan gone-bananas.txt
+zaphodvox --encoder=qwen --voice-id=Ryan --plan gone-bananas.txt
 ```
 
 The above command will write the manifest plan to `gone-bananas-plan.json` without doing any encoding. It can be reviewed and edited before being used as input to the command with the `--encode` argument.

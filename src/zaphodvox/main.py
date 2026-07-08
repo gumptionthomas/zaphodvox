@@ -61,10 +61,6 @@ def main(
 
         if args.concat and manifest:
             concat(args, manifest)
-
-        if args.delete_history:
-            if delete := getattr(args.encoder, 'delete_history', None):
-                delete()
     except Exception as e:
         console.print(f'[bold red]Er, error: {e}[/bold red]')
         sys.exit(1)
@@ -82,12 +78,11 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
     plan: bool = args.plan
     encode: bool = args.encode
     concat: bool = args.concat
-    delete_history: bool = args.delete_history
 
     if args.version:
         console.print(f'{Path(sys.argv[0]).stem}, version {__version__}')
         sys.exit(0)
-    if not any([clean, plan, encode, concat, delete_history]):
+    if not any([clean, plan, encode, concat]):
         console.print(
             "[italic dim]Nothing to do... I'd give you advice, "
             "but you wouldn't listen. No one ever does.[/italic dim]"
@@ -105,16 +100,11 @@ def validate(args: Namespace) -> None:
         ValueError: If there is a problem with the specified arguments.
     """
     inputfile: Optional[Path] = args.inputfile
-    delete_history: bool = args.delete_history
     encoder_name: Optional[str] = args.encoder_name
     encode: bool = args.encode
 
-    if not (inputfile or delete_history):
+    if not inputfile:
         raise ValueError('No input file specified.')
-    if delete_history and encoder_name != 'elevenlabs':
-        raise ValueError(
-            'The "elevenlabs" encoder must be specified to delete history.'
-        )
     if encode and not encoder_name:
         raise ValueError('No encoder specified.')
 
@@ -184,7 +174,6 @@ def plan(
     """
     basename: str = args.basename
     encoder: Optional[Encoder] = args.encoder
-    encoder_name: Optional[str] = args.encoder_name
     max_chars: Optional[int] = args.max_chars
     named_voices: NamedVoices = args.named_voices
     silence_duration: Optional[int] = args.silence_duration
@@ -192,7 +181,7 @@ def plan(
     voice_name: Optional[str] = args.voice_name
 
     plan_manifest = None
-    encoder_voices = named_voices.encoder_voices(encoder_name)
+    encoder_voices = named_voices.encoder_voices()
     if not voice and voice_name:
         voice = encoder_voices.get(voice_name)
     if manifest:
@@ -201,8 +190,9 @@ def plan(
             f = fragment.model_copy()
             if f.voice_name:
                 f.voice = encoder_voices.get(f.voice_name)
-            else:
+            elif voice:
                 f.voice = voice
+            # Otherwise keep the fragment's own inline voice (if any).
             fragments.append(f)
     else:
         fragments = parse_text(
@@ -229,7 +219,6 @@ def encode(args: Namespace, manifest: Manifest) -> Manifest:
     """
     out_dir: Optional[Path] = args.out_dir
     encoder: Encoder = args.encoder
-    encoder_name: str = args.encoder_name
     index_str: Optional[str] = args.indexes
     named_voices: NamedVoices = args.named_voices
     silence_duration: Optional[int] = args.silence_duration
@@ -238,7 +227,7 @@ def encode(args: Namespace, manifest: Manifest) -> Manifest:
         manifest,
         encode_dir=out_dir,
         indexes=parse_indexes(index_str, manifest.length),
-        voices=named_voices.encoder_voices(encoder_name),
+        voices=named_voices.encoder_voices(),
         silence_duration=silence_duration
     )
     manifest.set_used_voices(named_voices.voices)
