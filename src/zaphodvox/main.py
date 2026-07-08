@@ -303,6 +303,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     instruct: Optional[str] = args.voice_instruct
     language: str = args.voice_language
     out_dir: Optional[Path] = args.out_dir
+    temperature: Optional[float] = args.voice_temperature
     voice_id: str = args.voice_id
 
     audition_text = args.audition_text or next(
@@ -324,7 +325,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             filename=f'{basename}-audition-{seed:02}.{file_ext}',
             voice=QwenVoice(
                 voice_id=voice_id, language=language,
-                instruct=instruct, seed=seed
+                instruct=instruct, seed=seed, temperature=temperature
             )
         )
         for seed in range(count)
@@ -338,6 +339,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             'voice_id': voice_id,
             'instruct': instruct,
             'language': language,
+            'temperature': temperature,
             'text': audition_text,
         }
         for seed, fragment in enumerate(fragments)
@@ -349,6 +351,8 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     header = f'Auditioning "{voice_id}"'
     if instruct:
         header += f'  ·  instruct: "{instruct}"'
+    if temperature is not None:
+        header += f'  ·  temp: {temperature}'
     header += f'  ·  {language}'
     console.print(header)
     table = Table()
