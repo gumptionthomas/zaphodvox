@@ -28,6 +28,11 @@ class QwenVoice(Voice):
     ref_text: Optional[str] = None
     """The transcript of `ref_audio`. If set, the higher-quality in-context
     (ICL) clone mode is used; otherwise a true zero-shot clone is used."""
+    seed: Optional[int] = None
+    """A fixed RNG seed for reproducible synthesis. When set, every fragment
+    using this voice is generated from the same seed, which keeps the voice
+    consistent across chunks (and across re-encodes). Defaults to `None`
+    (non-deterministic)."""
 
     @model_validator(mode='after')
     def _check_preset_or_clone(self) -> 'QwenVoice':
@@ -73,4 +78,5 @@ class QwenVoice(Voice):
             instruct=args.voice_instruct,
             ref_audio=str(ref_audio) if ref_audio else None,
             ref_text=args.voice_ref_text,
+            seed=args.voice_seed,
         )
