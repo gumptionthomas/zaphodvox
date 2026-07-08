@@ -50,6 +50,14 @@ class TestArgParser():
         assert args.llm_url is None
         assert args.llm_model is None
 
+    def test_llm_model_from_env(self, monkeypatch):
+        monkeypatch.setenv('ZAPHODVOX_LLM_MODEL', 'qwen2.5-7b-instruct')
+        args = parse_args(['--proof', 'book.txt'])
+        assert args.llm_model == 'qwen2.5-7b-instruct'
+        # An explicit flag still wins.
+        args = parse_args(['--proof', '--llm-model=other', 'book.txt'])
+        assert args.llm_model == 'other'
+
     def test_encoder_choice(self):
         args = parse_args(['--encoder=qwen', 'test.txt'])
         assert args.encoder_name == 'qwen'

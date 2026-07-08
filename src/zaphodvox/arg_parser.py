@@ -226,8 +226,11 @@ def parse_args(args: list) -> Namespace:
     )
     proof_group.add_argument(
         '--llm-model',
-        default=None,
-        help='The LLM model id to use (default: the server\'s loaded model)'
+        default=os.environ.get('ZAPHODVOX_LLM_MODEL'),
+        help=(
+            'The LLM model id to use (default: $ZAPHODVOX_LLM_MODEL, else the '
+            "server's loaded model)"
+        )
     )
     parser.add_argument(
         '--concat-out',
