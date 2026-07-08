@@ -41,6 +41,8 @@ python -m zaphodvox.main --help    # or, if installed: zaphodvox --help
 4. **`--encode`** — `Encoder.encode_manifest()` synthesizes each fragment to an audio file and updates the manifest in place. Optionally writes `<basename>-manifest.json`.
 5. **`--concat`** — `audio.concat_files()` stitches fragment audio into `<basename>.<ext>` via `pydub`.
 
+There's also a standalone **`--audition N`** mode (`main.audition()`): given a preset `--voice-id` and a sample sentence, it synthesizes `N` candidate reference clips across seeds `0..N-1` (candidate `k` uses seed `k`) so the best take can be adopted as a clone anchor. It reuses `encode_manifest()` by building a synthetic `Manifest` of `N` same-text fragments with per-seed `QwenVoice`s, writes a `*-audition.json` index, and prints a table. It's mutually exclusive with the other action flags.
+
 If no action flag is given, the program prints a quip and exits 0 (`handle_version_and_ntd`). All exceptions bubble to `main()`'s top-level handler, which prints a red error and exits 1.
 
 ## Key architectural concepts

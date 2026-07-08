@@ -150,6 +150,24 @@ def parse_args(args: list) -> Namespace:
         help='Concatenate the encoded segment audio files into one audio file'
     )
     parser.add_argument(
+        '--audition',
+        type=int,
+        default=None,
+        metavar='N',
+        help=(
+            'Generate N candidate reference clips of a preset --voice-id '
+            'across seeds 0..N-1 to audition (candidate k uses seed k)'
+        )
+    )
+    parser.add_argument(
+        '--audition-text',
+        default=None,
+        help=(
+            'The sample sentence(s) to speak when auditioning '
+            '(default: the first line of the inputfile)'
+        )
+    )
+    parser.add_argument(
         '--concat-out',
         type=Path,
         default=None,

@@ -115,6 +115,23 @@ zaphodvox --encoder=qwen --voice-id=Ryan --voice-seed=42 --max-chars=500 --encod
 
 The seed is stored with the voice in the manifest, so re-encoding a fragment reproduces the same audio. (Requires a Qwen3-TTS server that accepts a `seed` parameter.)
 
+### Auditioning a reference voice
+
+> "The ships hung in the sky in much the same way that bricks don't."
+
+For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset. The `--audition` argument helps you find a good reference: it synthesizes `N` candidate clips of a preset voice, one per seed (`0` to `N-1`, so candidate `k` uses seed `k`), from a sample sentence you provide:
+
+```bash
+zaphodvox --encoder=qwen --voice-id=Ryan \
+  --voice-instruct="calm narrator, neutral American accent" \
+  --audition=5 --audition-text="It is a mistake to think you can solve any major problems just with potatoes." \
+  --out-dir=refs
+```
+
+This writes `ryan-audition-00.wav` … `ryan-audition-04.wav` (the basename defaults to the voice name), plus a `ryan-audition.json` index, and prints a table of the candidates. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used.
+
+Listen to the candidates and adopt the one you like — either as a clone anchor (`--voice-ref-audio=refs/ryan-audition-02.wav --voice-ref-text="<the audition text>"`), which is the most consistent, or by reusing its seed on the preset (`--voice-id=Ryan --voice-seed=2`). Auditioning is its own mode and can't be combined with `--encode`/`--plan`/`--concat`.
+
 ### Concatenation
 
 To combine the individual fragment audio files into one, add the `--concat` argument:
