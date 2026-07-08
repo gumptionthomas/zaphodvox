@@ -36,6 +36,7 @@ class TestArgParser():
         assert args.voice_instruct is None
         assert args.voice_ref_audio is None
         assert args.voice_ref_text is None
+        assert args.voice_description is None
         assert args.voice_seed is None
         assert args.voice_temperature is None
         assert args.qwen_url == DEFAULT_URL
@@ -65,6 +66,7 @@ class TestArgParser():
         assert args.voice_ref_audio == Path('ref.wav')
         assert args.voice_ref_text == 'hello'
         assert args.voice_seed == 42
+        assert args.voice_description is None
         assert args.voice_temperature == 0.6
         assert args.qwen_url == 'http://localhost:9999'
         assert args.qwen_audio_format == 'mp3'

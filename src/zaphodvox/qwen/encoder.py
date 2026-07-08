@@ -84,6 +84,8 @@ class QwenEncoder(Encoder):
             with attempt:
                 if voice.is_clone:
                     self._t2s_clone(text, voice, filepath)
+                elif voice.is_design:
+                    self._t2s_design(text, voice, filepath)
                 else:
                     self._t2s_preset(text, voice, filepath)
 
@@ -147,6 +149,32 @@ class QwenEncoder(Encoder):
             ) as r:
                 r.raise_for_status()
                 filepath.write_bytes(r.content)
+
+    def _t2s_design(
+        self, text: str, voice: QwenVoice, filepath: Path
+    ) -> None:
+        """Synthesize a designed voice via `POST /v1/audio/speech/design`.
+
+        Args:
+            text: The text to convert to speech.
+            voice: The design `QwenVoice` to use.
+            filepath: The `Path` of the generated audio file.
+        """
+        payload: dict = {
+            'input': text,
+            'voice_description': voice.description,
+            'language': voice.language,
+            'response_format': self.audio_format,
+        }
+        if voice.seed is not None:
+            payload['seed'] = voice.seed
+        if voice.temperature is not None:
+            payload['temperature'] = voice.temperature
+        with requests.post(
+            f'{self._url}/v1/audio/speech/design', json=payload
+        ) as r:
+            r.raise_for_status()
+            filepath.write_bytes(r.content)
 
     @classmethod
     def from_args(

@@ -233,6 +233,14 @@ def parse_args(args: list) -> Namespace:
         help='A reference audio file to clone (instead of a preset --voice-id)'
     )
     qwen_group.add_argument(
+        '--voice-description',
+        default=None,
+        help=(
+            'A natural-language description of a voice to design '
+            '(e.g. "a warm elderly woman"), instead of --voice-id/--voice-ref-audio'
+        )
+    )
+    qwen_group.add_argument(
         '--voice-ref-text',
         default=None,
         help=(

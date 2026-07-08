@@ -9,25 +9,29 @@ from zaphodvox.voice import Voice
 class QwenVoice(Voice):
     """A `Voice` configuration subclass for a Qwen3-TTS server.
 
-    A voice is either a *preset* (a built-in speaker named by `voice_id`) or a
-    *clone* (a zero-shot clone of the reference audio at `ref_audio`). Exactly
-    one of `voice_id` or `ref_audio` must be set.
+    A voice is one of: a *preset* (a built-in speaker named by `voice_id`), a
+    *clone* (a zero-shot clone of the reference audio at `ref_audio`), or a
+    *design* (a voice generated from the natural-language `description`).
+    Exactly one of `voice_id`, `ref_audio`, or `description` must be set.
     """
 
     voice_id: Optional[str] = None
     """The built-in preset speaker name (e.g. `Ryan`). Mutually exclusive with
-    `ref_audio`."""
+    `ref_audio`/`description`."""
     language: str = 'English'
     """The language of the text (e.g. `English`). Defaults to `English`."""
     instruct: Optional[str] = None
     """An optional style/emotion direction for a preset voice (e.g. `calm,
-    wry`). Ignored for cloned voices."""
+    wry`). Ignored for cloned/designed voices."""
     ref_audio: Optional[str] = None
     """The path to a reference audio file to clone. Mutually exclusive with
-    `voice_id`."""
+    `voice_id`/`description`."""
     ref_text: Optional[str] = None
     """The transcript of `ref_audio`. If set, the higher-quality in-context
     (ICL) clone mode is used; otherwise a true zero-shot clone is used."""
+    description: Optional[str] = None
+    """A natural-language description of a voice to design (e.g. `a warm
+    elderly woman`). Mutually exclusive with `voice_id`/`ref_audio`."""
     seed: Optional[int] = None
     """A fixed RNG seed for reproducible synthesis. When set, every fragment
     using this voice is generated from the same seed, which keeps the voice
@@ -39,16 +43,25 @@ class QwenVoice(Voice):
     are more expressive. Defaults to `None` (the server's default)."""
 
     @model_validator(mode='after')
-    def _check_preset_or_clone(self) -> 'QwenVoice':
-        """Ensures the voice is either a preset or a clone, but not neither.
+    def _check_voice_source(self) -> 'QwenVoice':
+        """Ensures the voice specifies exactly one source (preset, clone, or
+        design).
 
         Raises:
-            ValueError: If neither `voice_id` nor `ref_audio` is set.
+            ValueError: If none or more than one of `voice_id`, `ref_audio`,
+                or `description` is set.
         """
-        if not self.voice_id and not self.ref_audio:
+        sources = [self.voice_id, self.ref_audio, self.description]
+        set_count = sum(source is not None for source in sources)
+        if set_count == 0:
             raise ValueError(
-                'A QwenVoice requires either a preset "voice_id" or a clone '
-                '"ref_audio".'
+                'A QwenVoice requires one of a preset "voice_id", a clone '
+                '"ref_audio", or a "description".'
+            )
+        if set_count > 1:
+            raise ValueError(
+                'A QwenVoice must specify exactly one of "voice_id", '
+                '"ref_audio", or "description".'
             )
         return self
 
@@ -57,9 +70,18 @@ class QwenVoice(Voice):
         """Whether this voice is a clone of a reference audio file.
 
         Returns:
-            `True` if the voice clones `ref_audio`, `False` if it is a preset.
+            `True` if the voice clones `ref_audio`.
         """
         return self.ref_audio is not None
+
+    @property
+    def is_design(self) -> bool:
+        """Whether this voice is designed from a description.
+
+        Returns:
+            `True` if the voice is generated from `description`.
+        """
+        return self.description is not None
 
     @classmethod
     def from_args(cls, args: Namespace) -> Optional['QwenVoice']:
@@ -73,8 +95,9 @@ class QwenVoice(Voice):
         """
         voice_id: Optional[str] = args.voice_id
         ref_audio = args.voice_ref_audio
+        description: Optional[str] = args.voice_description
 
-        if not voice_id and not ref_audio:
+        if not any([voice_id, ref_audio, description]):
             return None
         return cls(
             voice_id=voice_id,
@@ -82,6 +105,7 @@ class QwenVoice(Voice):
             instruct=args.voice_instruct,
             ref_audio=str(ref_audio) if ref_audio else None,
             ref_text=args.voice_ref_text,
+            description=description,
             seed=args.voice_seed,
             temperature=args.voice_temperature,
         )

@@ -73,9 +73,9 @@ gone-bananas-00003.wav ["between lines. Ideally, these..."]
 
 In addition to the audio files, a manifest JSON file (`gone-bananas-manifest.json`) will also be written to the current directory. This file contains information about the fragment audio files encoded, including the text, the relative file name, and the voice used. This manifest file can also be used as input to the command rather than a text file. See the [manifest documentation](#manifest) for more information.
 
-### Voices: Presets and Clones
+### Voices: Presets, Clones, and Designs
 
-A Qwen voice is either a built-in **preset speaker** or a zero-shot **clone** of a reference audio file. `--voice-id` (preset) and `--voice-ref-audio` (clone) are mutually exclusive.
+A Qwen voice is one of: a built-in **preset speaker**, a zero-shot **clone** of a reference audio file, or a **design** generated from a text description. `--voice-id` (preset), `--voice-ref-audio` (clone), and `--voice-description` (design) are mutually exclusive.
 
 To use a **preset speaker**, pass its name to `--voice-id`. The available speakers are `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, and `Sohee`. You can optionally steer the delivery with `--voice-instruct` and set the language with `--voice-language`:
 
@@ -101,6 +101,14 @@ Without a transcript, this performs a true zero-shot clone. If you also provide 
 zaphodvox --encoder=qwen --voice-ref-audio=trillian-sample.wav --voice-ref-text="Well, hello there." --encode gone-bananas.txt
 ```
 
+To **design a voice** from a natural-language description, pass it to `--voice-description`:
+
+```bash
+zaphodvox --encoder=qwen --voice-description="a warm elderly woman, gentle and unhurried" --encode gone-bananas.txt
+```
+
+Note that a designed voice is the least consistent choice for a whole book — the model re-derives the voice from the description on each call. For steady narration, design a voice, audition it, and **adopt the best take as a clone** (see [Auditioning a reference voice](#auditioning-a-reference-voice) below); the clone then anchors every chunk.
+
 The audio output format is `wav` by default. Use `--qwen-audio-format` to select `wav` or `mp3`:
 
 ```bash
@@ -121,7 +129,7 @@ A seed makes each fragment *reproducible* but doesn't stop the model from readin
 
 > "The ships hung in the sky in much the same way that bricks don't."
 
-For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset. The `--audition` argument helps you find a good reference: it synthesizes `N` candidate clips of a preset voice, one per seed (`0` to `N-1`, so candidate `k` uses seed `k`), from a sample sentence you provide:
+For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes `N` candidate clips of a preset (`--voice-id`) or designed (`--voice-description`) voice, one per seed (`0` to `N-1`, so candidate `k` uses seed `k`), from a sample sentence you provide:
 
 ```bash
 zaphodvox --encoder=qwen --voice-id=Ryan \
@@ -267,11 +275,12 @@ A voice is either a **preset** (a built-in speaker named by `voice_id`) or a **c
 
 The fields are:
 
-- `voice_id`: The built-in preset speaker name (one of `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, `Sohee`). Mutually exclusive with `ref_audio`.
+- `voice_id`: The built-in preset speaker name (one of `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, `Sohee`). Mutually exclusive with `ref_audio`/`description`.
 - `language`: The language of the text (defaults to `English`).
-- `instruct`: An optional style/emotion direction for a preset voice (e.g. `calm, wry`). Ignored for cloned voices.
-- `ref_audio`: The path to a reference audio file to clone. Mutually exclusive with `voice_id`.
+- `instruct`: An optional style/emotion direction for a preset voice (e.g. `calm, wry`). Ignored for cloned/designed voices.
+- `ref_audio`: The path to a reference audio file to clone. Mutually exclusive with `voice_id`/`description`.
 - `ref_text`: The transcript of `ref_audio`. If set, the higher-quality in-context (ICL) clone mode is used; otherwise a true zero-shot clone is used.
+- `description`: A natural-language description of a voice to design (e.g. `a warm elderly woman`). Mutually exclusive with `voice_id`/`ref_audio`.
 - `seed`: An optional fixed RNG seed. When set, every fragment using this voice is synthesized from the same seed, keeping the voice consistent across chunks and across re-encodes. Defaults to non-deterministic.
 - `temperature`: An optional sampling temperature. Lower values (e.g. `0.6`) make the delivery flatter and more uniform across chunks; higher values are more expressive. Defaults to the server's default.
 
@@ -292,6 +301,16 @@ A clone example:
 {
     "ref_audio": "trillian-sample.wav",
     "ref_text": "Well, hello there."
+}
+```
+
+A design example:
+
+```json
+{
+    "description": "a warm elderly woman, gentle and unhurried",
+    "seed": 7,
+    "temperature": 0.6
 }
 ```
 

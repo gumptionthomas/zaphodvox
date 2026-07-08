@@ -547,6 +547,34 @@ class TestAudition():
         ]
         assert temps == [0.6, 0.6]
 
+    def test_audition_design(self, mock_qwen, mock_builtins_open):
+        # Auditioning a designed voice posts to the design endpoint.
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-description=a warm elderly woman',
+            '--audition=2',
+            '--audition-text=A sufficiently long sample sentence for the '
+            'narrator so the reference clip is a usable length for cloning.',
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: each candidate is a design request, seeds vary.
+        assert mock_qwen.post.call_count == 2
+        for c in mock_qwen.post.call_args_list:
+            assert c.args[0].endswith('/v1/audio/speech/design')
+            assert c.kwargs['json']['voice_description'] == (
+                'a warm elderly woman'
+            )
+        seeds = [c.kwargs['json']['seed'] for c in mock_qwen.post.call_args_list]
+        assert seeds == [0, 1]
+        # basename defaults to 'design' when there is no input file or voice id.
+        mock_builtins_open.assert_any_call('design-audition.json', 'w')
+        mock_qwen.write_bytes.assert_any_call(
+            Path('design-audition-00.wav'), b'audio'
+        )
+
     def test_audition_uses_inputfile_text(self, mock_qwen, mock_builtins_open):
         # Setup: no --audition-text, so the input file's first line is used.
         sys_args = [
