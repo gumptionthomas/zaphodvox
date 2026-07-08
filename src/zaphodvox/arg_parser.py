@@ -239,6 +239,15 @@ def parse_args(args: list) -> Namespace:
         )
     )
     qwen_group.add_argument(
+        '--voice-temperature',
+        type=float,
+        default=None,
+        help=(
+            'The sampling temperature; lower is flatter/more uniform, higher '
+            'is more expressive (default: the server default)'
+        )
+    )
+    qwen_group.add_argument(
         '--qwen-url',
         default=os.environ.get('ZAPHODVOX_QWEN_URL', DEFAULT_URL),
         help=(

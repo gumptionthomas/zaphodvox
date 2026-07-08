@@ -107,6 +107,8 @@ class QwenEncoder(Encoder):
             payload['instruct'] = voice.instruct
         if voice.seed is not None:
             payload['seed'] = voice.seed
+        if voice.temperature is not None:
+            payload['temperature'] = voice.temperature
         with requests.post(
             f'{self._url}/v1/audio/speech', json=payload
         ) as r:
@@ -135,6 +137,8 @@ class QwenEncoder(Encoder):
             data['x_vector_only'] = 'true'
         if voice.seed is not None:
             data['seed'] = str(voice.seed)
+        if voice.temperature is not None:
+            data['temperature'] = str(voice.temperature)
         with open(voice.ref_audio, 'rb') as ref:
             with requests.post(
                 f'{self._url}/v1/audio/speech/upload',

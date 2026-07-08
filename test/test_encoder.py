@@ -217,6 +217,41 @@ class TestEncoder():
             'seed': '42',
         }
 
+    def test_encode_preset_temperature(self, mock_qwen, tmp_path):
+        # A preset voice with a temperature sends it in the JSON payload.
+        voice = QwenVoice(voice_id='Ryan', seed=42, temperature=0.6)
+
+        QwenEncoder().t2s('Hello', voice, tmp_path / 'out.wav')
+
+        mock_qwen.post.assert_called_once_with(
+            f'{DEFAULT_URL}/v1/audio/speech',
+            json={
+                'input': 'Hello',
+                'voice': 'Ryan',
+                'language': 'English',
+                'response_format': 'wav',
+                'seed': 42,
+                'temperature': 0.6,
+            }
+        )
+
+    def test_encode_clone_temperature(self, mock_qwen, tmp_path):
+        # A clone voice with a temperature sends it as a (string) form field.
+        ref = tmp_path / 'ref.wav'
+        ref.write_text('reference-audio')
+        voice = QwenVoice(ref_audio=str(ref), temperature=0.6)
+
+        QwenEncoder().t2s('Clone me', voice, tmp_path / 'out.wav')
+
+        _, kwargs = mock_qwen.post.call_args
+        assert kwargs['data'] == {
+            'input': 'Clone me',
+            'language': 'English',
+            'response_format': 'wav',
+            'x_vector_only': 'true',
+            'temperature': '0.6',
+        }
+
     def test_encode_retries(self, mock_qwen, tmp_path):
         # Setup: the server errors on every attempt.
         mock_qwen.response.raise_for_status.side_effect = Exception('boom')
