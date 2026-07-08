@@ -41,6 +41,12 @@ class TestArgParser():
         assert args.voice_temperature is None
         assert args.qwen_url == DEFAULT_URL
         assert args.qwen_audio_format == 'wav'
+        # Proofing
+        assert args.proof is False
+        assert args.proof_out is None
+        assert args.dict is None
+        assert args.add_word is None
+        assert args.dict_language == 'en'
 
     def test_encoder_choice(self):
         args = parse_args(['--encoder=qwen', 'test.txt'])

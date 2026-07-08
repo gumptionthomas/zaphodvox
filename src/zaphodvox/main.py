@@ -9,10 +9,12 @@ from rich.table import Table
 
 from zaphodvox import __version__
 from zaphodvox.audio import concat_files
+from zaphodvox.dictionary import add_words, build_speller, load_words
 from zaphodvox.encoder import Encoder
 from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.named_voices import NamedVoices
 from zaphodvox.arg_parser import parse_args
+from zaphodvox.proof import proof_text
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import clean_text, parse_text
 from zaphodvox.voice import Voice
@@ -37,6 +39,10 @@ def main(
     try:
         validate(args)
 
+        if args.add_word:
+            add_word(args, console)
+            return
+
         if not args.basename:
             if args.inputfile:
                 args.basename = args.inputfile.stem
@@ -49,6 +55,10 @@ def main(
 
         if args.adopt is not None:
             adopt(args, text, console)
+            return
+
+        if args.proof:
+            proof(args, text, console)
             return
 
         args.named_voices = read_voices(args.voices_file, manifest)
@@ -97,11 +107,15 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
     concat: bool = args.concat
     audition: bool = bool(args.audition)
     adopt: bool = args.adopt is not None
+    proof: bool = args.proof
+    add_word: bool = bool(args.add_word)
 
     if args.version:
         console.print(f'{Path(sys.argv[0]).stem}, version {__version__}')
         sys.exit(0)
-    if not any([clean, plan, encode, concat, audition, adopt]):
+    if not any(
+        [clean, plan, encode, concat, audition, adopt, proof, add_word]
+    ):
         console.print(
             "[italic dim]Nothing to do... I'd give you advice, "
             "but you wouldn't listen. No one ever does.[/italic dim]"
@@ -122,11 +136,21 @@ def validate(args: Namespace) -> None:
     encoder_name: Optional[str] = args.encoder_name
     encode: bool = args.encode
     audition: Optional[int] = args.audition
+    add_word = args.add_word
 
+    if add_word:
+        if not args.dict:
+            raise ValueError('--add-word requires --dict.')
+        return
     if not (inputfile or audition):
         raise ValueError('No input file specified.')
     if (encode or audition) and not encoder_name:
         raise ValueError('No encoder specified.')
+    if args.proof and any(
+        [args.clean, args.plan, encode, args.concat, audition,
+         args.adopt is not None]
+    ):
+        raise ValueError('--proof cannot be combined with other actions.')
     if audition:
         if any([args.clean, args.plan, args.encode, args.concat]):
             raise ValueError(
@@ -461,6 +485,70 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
     verb = 'Updated' if existed else 'Added'
     console.print(f'{verb} voice "{voice_name}" in {voices_file}:')
     console.print(voice.model_dump_json(indent=4, exclude_none=True))
+
+
+def proof(args: Namespace, text: str, console: Console) -> None:
+    """Proofreads the text and writes a report of deterministic issues
+        (spelling against a project wordlist, junk/unusual characters,
+        whitespace).
+
+    Args:
+        args: The parsed command-line arguments.
+        text: The manuscript text.
+        console: The `Console` object.
+    """
+    basename: str = args.basename
+    dict_path: Path = args.dict or Path(f'{basename}.dict')
+    out_dir: Optional[Path] = args.out_dir
+
+    speller = build_speller(args.dict_language, load_words(dict_path))
+    report = proof_text(text, speller)
+    report.source_file = str(args.inputfile)
+
+    fp = file_path(args.proof_out, f'{basename}-proof.json', out_dir)
+    with open(str(fp), 'w') as f:
+        f.write(report.model_dump_json(indent=4, exclude_none=True))
+
+    total = len(report.findings)
+    if not total:
+        console.print('[green]No issues found.[/green]')
+    else:
+        table = Table(title=f'{total} issue(s)')
+        table.add_column('line', justify='right')
+        table.add_column('type')
+        table.add_column('text')
+        table.add_column('message')
+        for finding in sorted(report.findings, key=lambda f: f.line):
+            detail = finding.message
+            if finding.suggestions:
+                detail += '  → ' + ', '.join(finding.suggestions)
+            if finding.count and finding.count > 1:
+                detail += f'  ({finding.count}×)'
+            table.add_row(str(finding.line), finding.type, finding.text, detail)
+        console.print(table)
+        console.print(
+            '[dim]'
+            + '  '.join(f'{k}: {v}' for k, v in report.summary.items())
+            + '[/dim]'
+        )
+    console.print(f'[dim]Report written to {fp}[/dim]')
+
+
+def add_word(args: Namespace, console: Console) -> None:
+    """Adds word(s) to the project wordlist and exits.
+
+    Args:
+        args: The parsed command-line arguments.
+        console: The `Console` object.
+    """
+    dict_path: Path = args.dict
+    added = add_words(dict_path, args.add_word)
+    if added:
+        console.print(
+            f'Added {len(added)} word(s) to {dict_path}: ' + ', '.join(added)
+        )
+    else:
+        console.print(f'No new words added to {dict_path}.')
 
 
 def read_text_manifest(

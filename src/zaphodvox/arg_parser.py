@@ -178,6 +178,43 @@ def parse_args(args: list) -> Namespace:
             'in --voices-file'
         )
     )
+    proof_group = parser.add_argument_group('proofing options')
+    proof_group.add_argument(
+        '--proof',
+        action='store_true',
+        default=False,
+        help='Proofread the input text and write a report of issues'
+    )
+    proof_group.add_argument(
+        '--proof-out',
+        type=Path,
+        default=None,
+        help=(
+            'The proof report output file '
+            '(default: [out-dir]/[basename]-proof.json)'
+        )
+    )
+    proof_group.add_argument(
+        '--dict',
+        type=Path,
+        default=None,
+        help=(
+            'A project wordlist file of accepted spellings '
+            '(default: [basename].dict)'
+        )
+    )
+    proof_group.add_argument(
+        '--add-word',
+        nargs='+',
+        default=None,
+        metavar='WORD',
+        help='Add word(s) to the --dict wordlist and exit'
+    )
+    proof_group.add_argument(
+        '--dict-language',
+        default='en',
+        help='The spell-check dictionary language (default: en)'
+    )
     parser.add_argument(
         '--concat-out',
         type=Path,

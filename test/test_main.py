@@ -712,3 +712,45 @@ class TestAdopt():
             main(['--adopt=1', '--voice-name=Narrator', 'idx.json'])
         assert se.value.code == 1
         assert '--adopt requires --voices-file' in capfd.readouterr()[0]
+
+
+class TestProof():
+    def test_proof_writes_report(self, tmp_path, monkeypatch):
+        # Uses real files so the bundled spell-check dictionary can load.
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text('The quick brown fox jumpd.\n')
+
+        main(['--proof', 'book.txt'])
+
+        report = json.loads((tmp_path / 'book-proof.json').read_text())
+        assert report['source_file'] == 'book.txt'
+        assert any(f['text'] == 'jumpd' for f in report['findings'])
+
+    def test_proof_honors_dict(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text('Zaphod waved his hand.\n')
+        (tmp_path / 'book.dict').write_text('Zaphod\n')
+
+        main(['--proof', '--dict', 'book.dict', 'book.txt'])
+
+        report = json.loads((tmp_path / 'book-proof.json').read_text())
+        assert not any(f['text'] == 'Zaphod' for f in report['findings'])
+
+    def test_add_word(self, tmp_path):
+        dict_path = tmp_path / 'book.dict'
+
+        main(['--add-word', 'Zaphod', 'Trillian', '--dict', str(dict_path)])
+
+        assert dict_path.read_text().splitlines() == ['Trillian', 'Zaphod']
+
+    def test_add_word_requires_dict(self, capfd):
+        with pytest.raises(SystemExit) as se:
+            main(['--add-word', 'Zaphod'])
+        assert se.value.code == 1
+        assert '--add-word requires --dict' in capfd.readouterr()[0]
+
+    def test_proof_rejects_other_actions(self, capfd):
+        with pytest.raises(SystemExit) as se:
+            main(['--proof', '--clean', 'book.txt'])
+        assert se.value.code == 1
+        assert '--proof cannot be combined' in capfd.readouterr()[0]
