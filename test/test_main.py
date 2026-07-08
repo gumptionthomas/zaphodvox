@@ -515,6 +515,27 @@ class TestAudition():
         # The index file is written.
         mock_builtins_open.assert_any_call('ryan-audition.json', 'w')
 
+    def test_audition_applies_temperature(self, mock_qwen, mock_builtins_open):
+        # --voice-temperature is fixed across all candidates (seed varies).
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-id=Ryan',
+            '--voice-temperature=0.6',
+            '--audition=2',
+            '--audition-text=A sufficiently long sample sentence for the '
+            'narrator so the reference clip is a usable length for cloning.',
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: every candidate carries the same temperature.
+        temps = [
+            c.kwargs['json']['temperature']
+            for c in mock_qwen.post.call_args_list
+        ]
+        assert temps == [0.6, 0.6]
+
     def test_audition_uses_inputfile_text(self, mock_qwen, mock_builtins_open):
         # Setup: no --audition-text, so the input file's first line is used.
         sys_args = [

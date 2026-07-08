@@ -125,12 +125,12 @@ For the most consistent narration, clone every chunk from a single fixed referen
 
 ```bash
 zaphodvox --encoder=qwen --voice-id=Ryan \
-  --voice-instruct="calm narrator, neutral American accent" \
+  --voice-instruct="calm narrator, neutral American accent" --voice-temperature=0.6 \
   --audition=5 --audition-text="It is a mistake to think you can solve any major problems just with potatoes." \
   --out-dir=refs
 ```
 
-This writes `ryan-audition-00.wav` … `ryan-audition-04.wav` (the basename defaults to the voice name), plus a `ryan-audition.json` index, and prints a table of the candidates. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used.
+This writes `ryan-audition-00.wav` … `ryan-audition-04.wav` (the basename defaults to the voice name), plus a `ryan-audition.json` index, and prints a table of the candidates. `--voice-instruct` and `--voice-temperature` apply to every candidate (only the seed varies), so audition at the same temperature you plan to encode with. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used.
 
 Listen to the candidates and adopt the one you like — either as a clone anchor (`--voice-ref-audio=refs/ryan-audition-02.wav --voice-ref-text="<the audition text>"`), which is the most consistent, or by reusing its seed on the preset (`--voice-id=Ryan --voice-seed=2`). Auditioning is its own mode and can't be combined with `--encode`/`--plan`/`--concat`.
 
