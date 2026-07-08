@@ -175,21 +175,25 @@ This is an example voice configuration file (`voices.json`):
         "Marvin": {
             "voice_id": "Eric",
             "language": "English",
-            "instruct": "depressed, morose"
+            "instruct": "depressed, morose, flat and weary",
+            "seed": 7
         },
         "Ford": {
             "voice_id": "Dylan",
-            "language": "English"
+            "language": "English",
+            "instruct": "wry, casual, neutral American accent",
+            "seed": 42
         },
         "Trillian": {
             "ref_audio": "trillian-sample.wav",
-            "ref_text": "Well, hello there."
+            "ref_text": "Well, hello there.",
+            "seed": 101
         }
     }
 }
 ```
 
-Each named voice maps directly to the [Qwen voice](#qwen-voice-configuration) fields.
+Each named voice maps directly to the [Qwen voice](#qwen-voice-configuration) fields, so the voices file is the natural home for per-voice tuning: give each voice its own `instruct` (to pin its delivery and accent) and its own `seed` (so a character sounds like themselves across every chunk, and re-encodes reproduce). Tune a voice on the CLI until it sits right, then park that exact `instruct`/`seed` here and forget it. Note that `instruct` steers preset voices only — for a cloned voice (like `Trillian` above), the reference clip's own delivery sets the tone.
 
 If a `--voices-file` is used, inline `ZVOX: [name]` tags in a text `inputfile` can specify the voice(s) to be used.
 
@@ -198,10 +202,11 @@ A example multi-voice text file (`heart-of-gold.txt`):
 ```text
 ZVOX: Marvin
 This text will be spoken by the Marvin voice defined in the voices JSON file. That is, it will use the
-"Eric" preset speaker with a "depressed, morose" instruction.
+"Eric" preset speaker with a "depressed, morose" instruction and seed 7.
 
 ZVOX: Ford
-This line will be spoken by the Ford voice. That is, it will use the "Dylan" preset speaker.
+This line will be spoken by the Ford voice. That is, it will use the "Dylan" preset speaker with its own
+instruction and seed.
 
 This paragraph will also be spoken by the Ford voice as it is still the "current" voice.
 
