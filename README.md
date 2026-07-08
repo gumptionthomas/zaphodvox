@@ -115,6 +115,8 @@ zaphodvox --encoder=qwen --voice-id=Ryan --voice-seed=42 --max-chars=500 --encod
 
 The seed is stored with the voice in the manifest, so re-encoding a fragment reproduces the same audio. (Requires a Qwen3-TTS server that accepts a `seed` parameter.)
 
+A seed makes each fragment *reproducible* but doesn't stop the model from reading different lines with different energy — that variation is driven by the text itself. To rein it in, lower the sampling temperature with `--voice-temperature` (e.g. `0.6`–`0.7` for steady narration; lower is flatter, higher is more expressive). Its effect depends on the server honoring a `temperature` parameter.
+
 ### Auditioning a reference voice
 
 > "The ships hung in the sky in much the same way that bricks don't."
@@ -265,6 +267,7 @@ The fields are:
 - `ref_audio`: The path to a reference audio file to clone. Mutually exclusive with `voice_id`.
 - `ref_text`: The transcript of `ref_audio`. If set, the higher-quality in-context (ICL) clone mode is used; otherwise a true zero-shot clone is used.
 - `seed`: An optional fixed RNG seed. When set, every fragment using this voice is synthesized from the same seed, keeping the voice consistent across chunks and across re-encodes. Defaults to non-deterministic.
+- `temperature`: An optional sampling temperature. Lower values (e.g. `0.6`) make the delivery flatter and more uniform across chunks; higher values are more expressive. Defaults to the server's default.
 
 A preset example:
 

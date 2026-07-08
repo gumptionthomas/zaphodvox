@@ -33,6 +33,10 @@ class QwenVoice(Voice):
     using this voice is generated from the same seed, which keeps the voice
     consistent across chunks (and across re-encodes). Defaults to `None`
     (non-deterministic)."""
+    temperature: Optional[float] = None
+    """The sampling temperature. Lower values make the delivery flatter and
+    more uniform across chunks (less text-driven improvisation); higher values
+    are more expressive. Defaults to `None` (the server's default)."""
 
     @model_validator(mode='after')
     def _check_preset_or_clone(self) -> 'QwenVoice':
@@ -79,4 +83,5 @@ class QwenVoice(Voice):
             ref_audio=str(ref_audio) if ref_audio else None,
             ref_text=args.voice_ref_text,
             seed=args.voice_seed,
+            temperature=args.voice_temperature,
         )
