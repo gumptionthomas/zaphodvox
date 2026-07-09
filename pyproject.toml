@@ -8,7 +8,8 @@ name = "zaphodvox"
 dynamic = ["version"]
 description = """\
   A command-line interface and python library for encoding text into \
-  synthetic speech using Google Cloud Text-To-Speech or ElevenLabs APIs.\
+  synthetic speech using a locally-hosted Qwen3-TTS server, with tools for \
+  cleaning and proofreading the text.\
   """
 readme = "README.md"
 license = "MIT"
@@ -20,9 +21,13 @@ keywords = [
   "audio",
   "mp3",
   "wav",
-  "ogg",
-  "elevenlabs",
-  "google-cloud-texttospeech",
+  "qwen",
+  "qwen3-tts",
+  "speech-synthesis",
+  "voice-cloning",
+  "audiobook",
+  "proofreading",
+  "spell-check",
   ]
 
 classifiers = [
@@ -35,6 +40,7 @@ classifiers = [
   "Topic :: Multimedia :: Sound/Audio :: Sound Synthesis",
   "Topic :: Multimedia :: Sound/Audio :: Speech",
   "Topic :: Text Processing",
+  "Topic :: Text Processing :: Linguistic",
   ]
 
 dependencies = [
