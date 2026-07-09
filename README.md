@@ -6,18 +6,24 @@ The `zaphodvox` python package provides a command-line interface for encoding a 
 
 > "He was clearly a man of many qualities, even if they were mostly bad ones."
 
-`zaphodvox` isn't published to PyPI — install it straight from GitHub:
+Install the latest release from PyPI:
 
 ```console
-$ pip install git+https://github.com/gumptionthomas/zaphodvox.git
+$ pip install zaphodvox
 ...
-Successfully installed zaphodvox...
+Successfully installed zaphodvox-2.0.0...
 
 $ zaphodvox test.txt
 Nothing to do... I'd give you advice, but you wouldn't listen. No one ever does.
 ```
 
-To hack on it, clone the repo and install in editable mode instead:
+For the latest unreleased code, install from GitHub instead:
+
+```console
+$ pip install git+https://github.com/gumptionthomas/zaphodvox.git
+```
+
+Or clone it and install in editable mode to hack on it:
 
 ```console
 $ git clone https://github.com/gumptionthomas/zaphodvox.git
