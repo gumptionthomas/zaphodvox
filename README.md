@@ -200,7 +200,7 @@ The text file will be cleaned before being encoded and concatenated into `gone-b
 
 ### Proofing
 
-> "The ships hung in the sky in much the same way that bricks don't."
+> "The Guide is definitive. Reality is frequently inaccurate."
 
 Before encoding, `--proof` scans the manuscript for issues and writes a report. It is **read-only** — it never edits your text; you fix things by hand from the report (the findings carry line numbers). The deterministic checks are:
 
