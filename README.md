@@ -30,12 +30,13 @@ Successfully uninstalled zaphodvox...
 
 `zaphodvox` does no synthesis itself. It talks to a locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server that exposes an OpenAI-style speech API, so you must have one running before encoding.
 
-The server needs to expose two endpoints:
+The server needs to expose three endpoints:
 
 - `POST /v1/audio/speech` for built-in preset speakers.
 - `POST /v1/audio/speech/upload` for zero-shot voice cloning.
+- `POST /v1/audio/speech/design` for voices generated from a description.
 
-The reference implementation is [qwen3-tts-api](https://github.com/cornball-ai/qwen3-tts-api). Follow its own README to install and run it; the models want an NVIDIA GPU, so a CUDA-capable card is effectively a prerequisite for the server (not for `zaphodvox`). No API keys or authentication are involved, as the server is expected to be local and trusted.
+The reference implementation is [**`eddie`**](https://github.com/gumptionthomas/eddie) — a Windows-friendly fork of [`cornball-ai/qwen3-tts-api`](https://github.com/cornball-ai/qwen3-tts-api), which in turn serves the open-weight [QwenLM/Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) models. Follow Eddie's README to install and run it. **The `--voice-seed` and `--voice-temperature` options require Eddie** — upstream `qwen3-tts-api` implements neither `seed` nor `temperature`, so on that server those flags are silently ignored. The models want an NVIDIA GPU, so a CUDA-capable card is effectively a prerequisite for the server (not for `zaphodvox`). No API keys or authentication are involved, as the server is expected to be local and trusted.
 
 By default `zaphodvox` talks to the server at `http://127.0.0.1:4123`. Override the base URL with the `--qwen-url` argument or the `ZAPHODVOX_QWEN_URL` environment variable.
 
@@ -121,9 +122,9 @@ By default each fragment is synthesized non-deterministically, so a voice can dr
 zaphodvox --encoder=qwen --voice-id=Ryan --voice-seed=42 --max-chars=500 --encode gone-bananas.txt
 ```
 
-The seed is stored with the voice in the manifest, so re-encoding a fragment reproduces the same audio. (Requires a Qwen3-TTS server that accepts a `seed` parameter.)
+The seed is stored with the voice in the manifest, so re-encoding a fragment reproduces the same audio.
 
-A seed makes each fragment *reproducible* but doesn't stop the model from reading different lines with different energy — that variation is driven by the text itself. To rein it in, lower the sampling temperature with `--voice-temperature` (e.g. `0.6`–`0.7` for steady narration; lower is flatter, higher is more expressive). Its effect depends on the server honoring a `temperature` parameter.
+A seed makes a given fragment *reproducible*, but the model still reads different lines with different energy — that variation is driven by the text itself. `--voice-temperature` tunes how much the delivery **varies from run to run**, not how flat or dramatic it is: lower is steadier and more repeatable, higher is more varied. It is *not* an expressiveness dial — on the same sentence, `0.3` and `1.0` are barely distinguishable by ear. For actual style control, reach for `--voice-instruct` (preset voices) or `--voice-description` (designed voices), which move the voice far more than temperature does.
 
 ### Auditioning a reference voice
 
@@ -315,7 +316,7 @@ The fields are:
 - `ref_text`: The transcript of `ref_audio`. If set, the higher-quality in-context (ICL) clone mode is used; otherwise a true zero-shot clone is used.
 - `description`: A natural-language description of a voice to design (e.g. `a warm elderly woman`). Mutually exclusive with `voice_id`/`ref_audio`.
 - `seed`: An optional fixed RNG seed. When set, every fragment using this voice is synthesized from the same seed, keeping the voice consistent across chunks and across re-encodes. Defaults to non-deterministic.
-- `temperature`: An optional sampling temperature. Lower values (e.g. `0.6`) make the delivery flatter and more uniform across chunks; higher values are more expressive. Defaults to the server's default.
+- `temperature`: An optional sampling temperature — how much the delivery varies from run to run (lower is steadier and more repeatable, higher is more varied), *not* an expressiveness control. Eddie defaults to `0.65` (narration-tuned), lower than Qwen's ~`0.9`, so moving from upstream `qwen3-tts-api` to Eddie changes the default output.
 
 A preset example:
 

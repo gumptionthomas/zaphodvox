@@ -316,8 +316,9 @@ def parse_args(args: list) -> Namespace:
         type=float,
         default=None,
         help=(
-            'The sampling temperature; lower is flatter/more uniform, higher '
-            'is more expressive (default: the server default)'
+            'The sampling temperature; run-to-run variability, not '
+            'expressiveness (lower is steadier, higher is more varied; '
+            'default: the server default)'
         )
     )
     qwen_group.add_argument(
