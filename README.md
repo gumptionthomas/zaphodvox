@@ -6,23 +6,26 @@ The `zaphodvox` python package provides a command-line interface for encoding a 
 
 > "He was clearly a man of many qualities, even if they were mostly bad ones."
 
+`zaphodvox` isn't published to PyPI — install it straight from GitHub:
+
 ```console
-$ pip install zaphodvox
+$ pip install git+https://github.com/gumptionthomas/zaphodvox.git
 ...
 Successfully installed zaphodvox...
 
-$ zaphodvox --help
-usage: zaphodvox --blah --blah --blah --beware --blah whatever
-...
 $ zaphodvox test.txt
 Nothing to do... I'd give you advice, but you wouldn't listen. No one ever does.
-
-$ pip uninstall zaphodvox
-...
-Successfully uninstalled zaphodvox...
 ```
 
-`zaphodvox` also requires a current installation of [ffmpeg](https://ffmpeg.org/).
+To hack on it, clone the repo and install in editable mode instead:
+
+```console
+$ git clone https://github.com/gumptionthomas/zaphodvox.git
+$ cd zaphodvox
+$ pip install -e .
+```
+
+`zaphodvox` needs **Python 3.10–3.12** (its pinned dependencies don't yet ship wheels for 3.13+, so a newer interpreter will try — and fail — to build them from source; [pyenv](https://github.com/pyenv/pyenv) makes pinning one easy) and a current installation of [ffmpeg](https://ffmpeg.org/). To actually synthesize anything, it also needs a running [Qwen3-TTS server](#qwen3-tts-server).
 
 ## Qwen3-TTS Server
 
