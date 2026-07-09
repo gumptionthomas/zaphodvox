@@ -1,6 +1,6 @@
 # zaphodvox
 
-The `zaphodvox` python package provides a command-line interface for encoding a text file into synthetic speech audio using a locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server (for example, the [qwen3-tts-api](https://github.com/cornball-ai/qwen3-tts-api) server, which wraps the open-weight Qwen3-TTS models).
+The `zaphodvox` python package provides a command-line interface for encoding a text file into synthetic speech audio using a locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server (the [`eddie-tts`](https://github.com/gumptionthomas/eddie-tts) fork of [qwen3-tts-api](https://github.com/cornball-ai/qwen3-tts-api), which wraps the open-weight Qwen3-TTS models).
 
 ## Installation
 

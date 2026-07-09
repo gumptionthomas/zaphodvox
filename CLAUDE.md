@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`zaphodvox` is a CLI and Python library that encodes a text file (or a JSON manifest) into synthetic speech audio using a **locally-hosted Qwen3-TTS server** (e.g. [cornball-ai/qwen3-tts-api](https://github.com/cornball-ai/qwen3-tts-api), which wraps the open-weight [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) models). Requires Python >=3.10 and a working `ffmpeg` install (used via `pydub`).
+`zaphodvox` is a CLI and Python library that encodes a text file (or a JSON manifest) into synthetic speech audio using a **locally-hosted Qwen3-TTS server** — the [`eddie-tts`](https://github.com/gumptionthomas/eddie-tts) fork of [cornball-ai/qwen3-tts-api](https://github.com/cornball-ai/qwen3-tts-api), serving the open-weight [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) models. Requires Python >=3.10 and a working `ffmpeg` install (used via `pydub`).
 
 Historically this project wrapped Google Cloud TTS, ElevenLabs, and AllTalk. As of 2.0.0 those backends were removed in favor of the single local Qwen backend; the pre-2.0 multi-backend code is preserved on the `v1.3.0-multi-backend` tag.
 
@@ -59,7 +59,7 @@ If no action flag is given, the program prints a quip and exits 0 (`handle_versi
 
 **Named voices are flat.** `NamedVoices` (`named_voices.py`) is just `{name: QwenVoice}` — a `--voices-file` and inline `ZVOX: <name>` tags in the text select a named voice directly. (Pre-2.0 this nested per-engine configs under `google`/`elevenlabs`/`alltalk` keys; that grouping is gone now that there's one backend.)
 
-**Manifest is the serializable source of truth** (`manifest.py`, Pydantic models `Manifest` + `Fragment`). It round-trips to JSON, can be hand-edited, and fed back in as input. `--manifest-indexes` (parsed by `main.parse_indexes()`, supports `1`, `1-3`, `2-`, `-4`, comma lists) re-encodes only selected fragments in place. Fragment `voice` fields serialize polymorphically via `SerializeAsAny`; the manifest's top-level `voices` dict is `{name: QwenVoice}` so a manifest is self-contained.
+**Manifest is the serializable source of truth** (`manifest.py`, Pydantic models `Manifest` + `Fragment`). It round-trips to JSON, can be hand-edited, and fed back in as input. `--indexes` (parsed by `main.parse_indexes()`, supports `1`, `1-3`, `2-`, `-4`, comma lists) re-encodes only selected fragments in place. Fragment `voice` fields serialize polymorphically via `SerializeAsAny`; the manifest's top-level `voices` dict is `{name: QwenVoice}` so a manifest is self-contained.
 
 **Inline voice switching.** `text.match_voice()` recognizes `ZVOX: <name>` lines; that line is not synthesized and sets the "current" voice for following fragments. Empty lines become silent fragments (`silence_duration`, rendered by `audio.create_silence`).
 

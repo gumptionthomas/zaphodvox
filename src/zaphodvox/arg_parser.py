@@ -267,7 +267,7 @@ def parse_args(args: list) -> Namespace:
         'qwen options',
         description=(
             'Qwen3-TTS options (a locally-hosted Qwen3-TTS server, e.g. '
-            'https://github.com/cornball-ai/qwen3-tts-api)'
+            'https://github.com/gumptionthomas/eddie-tts)'
         )
     )
     qwen_group.add_argument(
