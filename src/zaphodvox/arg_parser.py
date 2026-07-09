@@ -267,7 +267,7 @@ def parse_args(args: list) -> Namespace:
         'qwen options',
         description=(
             'Qwen3-TTS options (a locally-hosted Qwen3-TTS server, e.g. '
-            'https://github.com/cornball-ai/qwen3-tts-api)'
+            'https://github.com/gumptionthomas/eddie-tts)'
         )
     )
     qwen_group.add_argument(
@@ -316,8 +316,9 @@ def parse_args(args: list) -> Namespace:
         type=float,
         default=None,
         help=(
-            'The sampling temperature; lower is flatter/more uniform, higher '
-            'is more expressive (default: the server default)'
+            'The sampling temperature; run-to-run variability, not '
+            'expressiveness (lower is steadier, higher is more varied; '
+            'default: the server default)'
         )
     )
     qwen_group.add_argument(

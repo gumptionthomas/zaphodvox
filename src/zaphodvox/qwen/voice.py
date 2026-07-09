@@ -38,9 +38,9 @@ class QwenVoice(Voice):
     consistent across chunks (and across re-encodes). Defaults to `None`
     (non-deterministic)."""
     temperature: Optional[float] = None
-    """The sampling temperature. Lower values make the delivery flatter and
-    more uniform across chunks (less text-driven improvisation); higher values
-    are more expressive. Defaults to `None` (the server's default)."""
+    """The sampling temperature: how much the delivery varies from run to run
+    (lower is steadier and more repeatable, higher is more varied), not an
+    expressiveness control. Defaults to `None` (the server's default)."""
 
     @model_validator(mode='after')
     def _check_voice_source(self) -> 'QwenVoice':
