@@ -6,6 +6,7 @@ from tenacity import Retrying, stop_after_attempt
 
 from zaphodvox.progress import ProgressBar
 from zaphodvox.proof import ProofFinding
+from zaphodvox.text import end_of_sentence
 
 DEFAULT_LLM_URL = 'http://127.0.0.1:1234'
 """The default base URL of a local OpenAI-compatible LLM server (LM Studio)."""
@@ -118,9 +119,14 @@ def _chunk_lines(
     """Groups lines into chunks of roughly `chunk_chars`, tracking the
         (1-based) starting line number of each chunk.
 
+    A chunk is only flushed at a sentence end or a blank (paragraph) line, so a
+    chunk never ends in the middle of a sentence — which would otherwise look
+    to the LLM like a truncated sentence with a missing terminal period.
+
     Args:
         lines: The text lines.
-        chunk_chars: The approximate chunk size in characters.
+        chunk_chars: The target chunk size in characters (a chunk may run
+            slightly longer to reach the next sentence boundary).
 
     Returns:
         A list of `(start_line, chunk_lines)` tuples.
@@ -130,13 +136,16 @@ def _chunk_lines(
     start = 1
     size = 0
     for number, line in enumerate(lines, start=1):
-        if current and size + len(line) > chunk_chars:
-            chunks.append((start, current))
-            current = []
+        if not current:
             start = number
-            size = 0
         current.append(line)
         size += len(line) + 1
+        stripped = line.strip()
+        at_boundary = not stripped or end_of_sentence(stripped)
+        if size >= chunk_chars and at_boundary:
+            chunks.append((start, current))
+            current = []
+            size = 0
     if current:
         chunks.append((start, current))
     return chunks
