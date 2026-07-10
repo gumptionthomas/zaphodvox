@@ -136,7 +136,7 @@ def validate(args: Namespace) -> None:
     inputfile: Optional[Path] = args.inputfile
     encoder_name: Optional[str] = args.encoder_name
     encode: bool = args.encode
-    audition: Optional[int] = args.audition
+    audition: Optional[str] = args.audition
     add_word = args.add_word
 
     if add_word:
@@ -349,7 +349,6 @@ def audition(args: Namespace, text: str, console: Console) -> None:
         ValueError: If no audition text can be determined.
     """
     basename: str = args.basename
-    count: int = args.audition
     description: Optional[str] = args.voice_description
     encoder: Encoder = args.encoder
     instruct: Optional[str] = args.voice_instruct
@@ -358,6 +357,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     temperature: Optional[float] = args.voice_temperature
     voice_id: Optional[str] = args.voice_id
 
+    seeds = parse_seeds(args.audition)
     audition_text = args.audition_text or next(
         (line.strip() for line in text.split('\n') if line.strip()), ''
     )
@@ -388,7 +388,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             filename=f'{basename}-audition-{seed:02}.{file_ext}',
             voice=candidate_voice(seed)
         )
-        for seed in range(count)
+        for seed in seeds
     ]
     encoder.encode_manifest(Manifest(fragments=fragments), encode_dir=out_dir)
 
@@ -403,7 +403,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             'temperature': temperature,
             'text': audition_text,
         }
-        for seed, fragment in enumerate(fragments)
+        for seed, fragment in zip(seeds, fragments)
     ]
     index_fp = file_path(None, f'{basename}-audition.json', out_dir)
     with open(str(index_fp), 'w') as f:
@@ -422,13 +422,13 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     table = Table()
     table.add_column('seed', justify='right')
     table.add_column('file')
-    for seed, fragment in enumerate(fragments):
+    for seed, fragment in zip(seeds, fragments):
         table.add_row(str(seed), fragment.filename)
     console.print(table)
     console.print(
-        'Adopt the one you like as a clone voice, e.g. seed 0:\n'
-        f'  zaphodvox --adopt 0 --voice-name <name> --voices-file voices.json '
-        f'{index_fp}'
+        f'Adopt the one you like as a clone voice, e.g. seed {seeds[0]}:\n'
+        f'  zaphodvox --adopt {seeds[0]} --voice-name <name> --voices-file '
+        f'voices.json {index_fp}'
     )
     console.print(f'[dim]Index written to {index_fp}[/dim]')
 
@@ -628,6 +628,50 @@ def parse_indexes(index_str: Optional[str], range_length: int) -> list[int]:
     else:
         ranges.append(range(0, range_length))
     return sorted(set(sum((list(r) for r in ranges), [])))
+
+
+def parse_seeds(spec: str) -> list[int]:
+    """Parses a seed spec (in the style of `--indexes`) into a sorted list of
+        unique seeds.
+
+    Accepts single seeds and closed ranges, comma-separated: `5`, `1-5`,
+    `3,9,20`. Unlike `--indexes`, open-ended ranges (`5-`, `-3`) are not
+    supported, as seeds have no upper bound.
+
+    Args:
+        spec: The seed spec string.
+
+    Returns:
+        The sorted, de-duplicated list of seeds.
+
+    Raises:
+        ValueError: If the spec is empty, malformed, or uses an open-ended
+            range.
+    """
+    seeds: set[int] = set()
+    for part in (s.strip() for s in spec.split(',')):
+        if not part:
+            continue
+        if '-' in part:
+            start_str, end_str = (s.strip() for s in part.split('-', 1))
+            if not start_str or not end_str:
+                raise ValueError(
+                    f'Open-ended seed range "{part}" is not supported; give '
+                    'both ends (e.g. "1-5").'
+                )
+            try:
+                start, end = int(start_str), int(end_str)
+            except ValueError:
+                raise ValueError(f'Invalid seed range "{part}".')
+            seeds.update(range(start, end + 1))
+        else:
+            try:
+                seeds.add(int(part))
+            except ValueError:
+                raise ValueError(f'Invalid seed "{part}".')
+    if not seeds:
+        raise ValueError('No seeds specified for --audition.')
+    return sorted(seeds)
 
 
 def file_path(

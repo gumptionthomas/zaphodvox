@@ -139,16 +139,16 @@ A seed makes a given fragment *reproducible*, but the model still reads differen
 
 > "The ships hung in the sky in much the same way that bricks don't."
 
-For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes `N` candidate clips of a preset (`--voice-id`) or designed (`--voice-description`) voice, one per seed (`0` to `N-1`, so candidate `k` uses seed `k`), from a sample sentence you provide:
+For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes a candidate clip of a preset (`--voice-id`) or designed (`--voice-description`) voice for each seed you specify — using the same syntax as `--indexes` (`5`, `1-5`, `3,9,20`) — from a sample sentence you provide:
 
 ```bash
 zaphodvox --encoder=qwen --voice-id=Ryan \
   --voice-instruct="calm narrator, neutral American accent" --voice-temperature=0.6 \
-  --audition=5 --audition-text="It is a mistake to think you can solve any major problems just with potatoes." \
+  --audition=1-5 --audition-text="It is a mistake to think you can solve any major problems just with potatoes." \
   --out-dir=refs
 ```
 
-This writes `ryan-audition-00.wav` … `ryan-audition-04.wav` (the basename defaults to the voice name), plus a `ryan-audition.json` index, and prints a table of the candidates. `--voice-instruct` and `--voice-temperature` apply to every candidate (only the seed varies), so audition at the same temperature you plan to encode with. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used.
+This writes `ryan-audition-01.wav` … `ryan-audition-05.wav` (the basename defaults to the voice name; files are named by seed), plus a `ryan-audition.json` index, and prints a table of the candidates. `--voice-instruct` and `--voice-temperature` apply to every candidate (only the seed varies), so audition at the same temperature you plan to encode with. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used. (Auditioning seeds `1-5` rather than `0-4` is a fine habit — nothing is special about seed `0`, but starting at `1` avoids always judging the same seed-`0` take first.)
 
 Listen to the candidates and adopt the one you like with `--adopt`, giving it a name and a voices file to write to (the audition index is the inputfile):
 

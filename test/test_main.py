@@ -501,11 +501,11 @@ class TestMain():
 
 class TestAudition():
     def test_audition(self, mock_qwen, mock_builtins_open):
-        # Setup: three candidates of a preset voice, no input file.
+        # Setup: three candidates (seeds 0-2) of a preset voice, no input file.
         sys_args = [
             '--encoder=qwen',
             '--voice-id=Ryan',
-            '--audition=3',
+            '--audition=0-2',
             '--audition-text=A sufficiently long sample sentence for the '
             'narrator so the reference clip is a usable length for cloning.',
         ]
@@ -532,7 +532,7 @@ class TestAudition():
             '--encoder=qwen',
             '--voice-id=Ryan',
             '--voice-temperature=0.6',
-            '--audition=2',
+            '--audition=0-1',
             '--audition-text=A sufficiently long sample sentence for the '
             'narrator so the reference clip is a usable length for cloning.',
         ]
@@ -552,7 +552,7 @@ class TestAudition():
         sys_args = [
             '--encoder=qwen',
             '--voice-description=a warm elderly woman',
-            '--audition=2',
+            '--audition=0-1',
             '--audition-text=A sufficiently long sample sentence for the '
             'narrator so the reference clip is a usable length for cloning.',
         ]
@@ -580,7 +580,7 @@ class TestAudition():
         sys_args = [
             '--encoder=qwen',
             '--voice-id=Ryan',
-            '--audition=1',
+            '--audition=0',
             'sample.txt',
         ]
         mock_builtins_open.side_effect = (
@@ -628,6 +628,53 @@ class TestAudition():
             main(['--encoder=qwen', '--voice-id=Ryan', '--audition=2'])
         assert se.value.code == 1
         assert 'No audition text specified' in capfd.readouterr()[0]
+
+    def test_audition_seed_range(self, mock_qwen, mock_builtins_open):
+        # A seed range renders exactly those seeds (skipping 0).
+        main([
+            '--encoder=qwen', '--voice-id=Ryan', '--audition=1-3',
+            '--audition-text=A long enough sample sentence for auditioning.',
+        ])
+
+        seeds = [c.kwargs['json']['seed'] for c in mock_qwen.post.call_args_list]
+        assert seeds == [1, 2, 3]
+        for seed in (1, 2, 3):
+            mock_qwen.write_bytes.assert_any_call(
+                Path(f'ryan-audition-0{seed}.wav'), b'audio'
+            )
+
+    def test_audition_seed_list(self, mock_qwen, mock_builtins_open):
+        # A comma list renders exactly those seeds, sorted and de-duplicated.
+        main([
+            '--encoder=qwen', '--voice-id=Ryan', '--audition=9,3,3',
+            '--audition-text=A long enough sample sentence for auditioning.',
+        ])
+
+        seeds = [c.kwargs['json']['seed'] for c in mock_qwen.post.call_args_list]
+        assert seeds == [3, 9]
+
+    def test_audition_open_ended_range_rejected(self, capfd, mock_qwen):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--voice-id=Ryan', '--audition=1-',
+                '--audition-text=hello',
+            ])
+        assert se.value.code == 1
+        assert 'Open-ended seed range' in capfd.readouterr()[0]
+
+    @pytest.mark.parametrize('spec,message', [
+        ('abc', 'Invalid seed "abc"'),
+        ('1-x', 'Invalid seed range "1-x"'),
+        (',,', 'No seeds specified'),
+    ])
+    def test_audition_bad_seed_specs(self, capfd, mock_qwen, spec, message):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--voice-id=Ryan', f'--audition={spec}',
+                '--audition-text=hello',
+            ])
+        assert se.value.code == 1
+        assert message in capfd.readouterr()[0]
 
 
 class TestAdopt():

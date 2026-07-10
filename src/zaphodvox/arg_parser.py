@@ -151,12 +151,12 @@ def parse_args(args: list) -> Namespace:
     )
     parser.add_argument(
         '--audition',
-        type=int,
         default=None,
-        metavar='N',
+        metavar='SEEDS',
         help=(
-            'Generate N candidate reference clips of a preset --voice-id '
-            'across seeds 0..N-1 to audition (candidate k uses seed k)'
+            'Generate candidate reference clips of a preset --voice-id or a '
+            '--voice-description for the given seeds to audition, specified '
+            'like --indexes (e.g. "5", "1-5", "3,9,20")'
         )
     )
     parser.add_argument(
