@@ -321,7 +321,7 @@ class TestMain():
         # Verify
         assert se.value.code == 0
         out, _ = capfd.readouterr()
-        assert 'version 2.0.0' in out
+        assert 'version 2.0.1' in out
 
     def test_nothing_to_do(self, capfd, mock_builtins_open):
         # Setup
