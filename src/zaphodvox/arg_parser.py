@@ -159,9 +159,11 @@ def parse_args(args: list) -> Namespace:
         default=None,
         metavar='SEEDS',
         help=(
-            'Generate candidate reference clips of a preset --voice-id or a '
-            '--voice-description for the given seeds to audition, specified '
-            'like --indexes (e.g. "5", "1-5", "3,9,20")'
+            'Generate candidate reference clips of a preset --voice-id, a '
+            '--voice-description, or a clone --voice-ref-audio (which re-clones '
+            'it, to re-anchor a noisy recording to clean audio) for the given '
+            'seeds to audition, specified like --indexes (e.g. "5", "1-5", '
+            '"3,9,20")'
         )
     )
     parser.add_argument(
