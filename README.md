@@ -139,7 +139,7 @@ A seed makes a given fragment *reproducible*, but the model still reads differen
 
 > "The ships hung in the sky in much the same way that bricks don't."
 
-For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes a candidate clip of a preset (`--voice-id`) or designed (`--voice-description`) voice for each seed you specify — using the same syntax as `--indexes` (`5`, `1-5`, `3,9,20`) — from a sample sentence you provide:
+For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes a candidate clip of a preset (`--voice-id`), designed (`--voice-description`), or cloned (`--voice-ref-audio`) voice for each seed you specify — using the same syntax as `--indexes` (`5`, `1-5`, `3,9,20`) — from a sample sentence you provide:
 
 ```bash
 zaphodvox --encoder=qwen --voice-id=Ryan \
@@ -157,6 +157,26 @@ zaphodvox --adopt=2 --voice-name=Narrator --voices-file=voices.json refs/ryan-au
 ```
 
 This adds (or updates) a `Narrator` clone voice in `voices.json` that references the chosen candidate clip, carrying over its `ref_text`, `seed`, and `temperature` from the audition. From then on, `ZVOX: Narrator` (or `--voice-name=Narrator`) reads with that voice. `--voice-seed`/`--voice-temperature` override the carried-over values if given. Auditioning and adopting are each their own mode and can't be combined with `--encode`/`--plan`/`--concat`.
+
+#### Cleaning up a recorded human voice
+
+Auditioning a **clone** (`--voice-ref-audio`) re-clones a voice you already have. The candidates are synthetic takes of it, so adopting one **re-anchors the voice to clean studio audio**. This is the way to launder a real recording — room tone, mouth noise, an uneven level, a cough at the end — into a reference clip fit for a whole book:
+
+```bash
+zaphodvox --encoder=qwen --voice-ref-audio=recording.wav \
+  --voice-ref-text="What I actually said in the recording." \
+  --basename=narrator --voice-temperature=0.6 \
+  --audition=1-8 --audition-text="It is a mistake to think you can solve any major problems just with potatoes." \
+  --out-dir=refs
+
+zaphodvox --adopt=5 --voice-name=Narrator --voices-file=voices.json refs/narrator-audition.json
+```
+
+Give it the transcript via `--voice-ref-text` so the higher-quality in-context mode is used, and audition generously (eight or so seeds) — you are shopping for one take that keeps the identity while dropping the mess. It helps to clean the source recording first with a real audio editor (trim, denoise, normalize); the model imitates what it is given, and a cleaner reference makes for cleaner candidates.
+
+**Do this once, from the original recording.** Each pass is a generation of copying, and artifacts compound: a clone of a clone of a clone drifts off the voice and starts to sound processed. One hop from real human audio is the sweet spot.
+
+The same mechanism gives you **sibling voices** — the same person with a different delivery. Because the model reads different lines with different energy, the sample sentence is the lever: audition the clone with an angry line, adopt that take as `Narrator-Angry`, and you have a matched pair. (`--voice-instruct` will *not* do this — it only applies to preset voices, and is ignored for clones.)
 
 ### Concatenation
 

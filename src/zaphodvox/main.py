@@ -164,20 +164,18 @@ def validate(args: Namespace) -> None:
             raise ValueError(
                 '--audition cannot be combined with other actions.'
             )
-        if args.voice_ref_audio:
+        sources = [
+            args.voice_id, args.voice_ref_audio, args.voice_description
+        ]
+        if not any(sources):
             raise ValueError(
-                'Auditioning generates reference clips; do not supply '
-                '"--voice-ref-audio".'
+                'Auditioning requires a preset "--voice-id", a clone '
+                '"--voice-ref-audio", or a "--voice-description".'
             )
-        if not (args.voice_id or args.voice_description):
+        if sum(source is not None for source in sources) > 1:
             raise ValueError(
-                'Auditioning requires a preset "--voice-id" or a '
+                'Specify exactly one of "--voice-id", "--voice-ref-audio", or '
                 '"--voice-description".'
-            )
-        if args.voice_id and args.voice_description:
-            raise ValueError(
-                'Specify either "--voice-id" or "--voice-description", not '
-                'both.'
             )
         if not (args.audition_text or inputfile):
             raise ValueError('No audition text specified.')
@@ -342,9 +340,16 @@ is shown, since short clips make poor clone references."""
 
 
 def audition(args: Namespace, text: str, console: Console) -> None:
-    """Synthesizes several candidate reference clips of a preset or designed
-        voice, one per seed, so the best-sounding take can be adopted as a
-        clone reference.
+    """Synthesizes several candidate reference clips of a preset, designed, or
+        cloned voice, one per seed, so the best-sounding take can be adopted as
+        a clone reference.
+
+    Auditioning a clone (`--voice-ref-audio`) re-clones an existing voice: the
+    candidates are synthetic takes of it, so adopting one re-anchors the voice
+    to clean studio audio. That is the way to launder a noisy human recording
+    into a usable reference. It costs a generation of fidelity, so it is worth
+    doing once, from the original recording — not to a clip that is itself
+    already a synthetic take.
 
     Args:
         args: The parsed command-line arguments.
@@ -361,6 +366,8 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     instruct: Optional[str] = args.voice_instruct
     language: str = args.voice_language
     out_dir: Optional[Path] = args.out_dir
+    ref_audio: Optional[Path] = args.voice_ref_audio
+    ref_text: Optional[str] = args.voice_ref_text
     temperature: Optional[float] = args.voice_temperature
     voice_id: Optional[str] = args.voice_id
 
@@ -378,6 +385,14 @@ def audition(args: Namespace, text: str, console: Console) -> None:
         )
 
     def candidate_voice(seed: int) -> QwenVoice:
+        if ref_audio:
+            # Re-cloning an existing clone. The candidates are synthetic takes
+            # of the source voice, so adopting one re-anchors the voice to clean
+            # studio audio instead of the original recording.
+            return QwenVoice(
+                ref_audio=ref_audio.as_posix(), ref_text=ref_text,
+                language=language, seed=seed, temperature=temperature
+            )
         if description:
             return QwenVoice(
                 description=description, language=language,
@@ -404,6 +419,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             'seed': seed,
             'filename': fragment.filename,
             'voice_id': voice_id,
+            'ref_audio': ref_audio.as_posix() if ref_audio else None,
             'description': description,
             'instruct': instruct,
             'language': language,
@@ -416,7 +432,11 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     with open(str(index_fp), 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(index, indent=4))
 
-    if description:
+    if ref_audio:
+        header = f'Auditioning clone of "{ref_audio}"'
+        if not ref_text:
+            header += '  ·  [dim]zero-shot (no --voice-ref-text)[/dim]'
+    elif description:
         header = f'Auditioning designed voice: "{description}"'
     else:
         header = f'Auditioning "{voice_id}"'
