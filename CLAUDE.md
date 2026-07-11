@@ -31,6 +31,10 @@ python -m zaphodvox.main --help    # or, if installed: zaphodvox --help
 
 `pytest` auto-adds `src` to `pythonpath` and writes coverage to `lcov.info` + terminal. Tests mock all network/API and filesystem calls (see `test/conftest.py`) — no real server, credentials, or `ffmpeg` are needed to run them.
 
+**Caveat: the suite patches `builtins.open` globally.** That keeps tests hermetic but means most of them never touch a real file — which is exactly how a fleet of missing `encoding='utf-8'` arguments survived until someone ran the CLI on Windows (cp1252 → `UnicodeDecodeError` on any curly quote). If you touch file I/O, add a test that does *real* I/O in a `tmp_path` with the `open` mock disabled; `TestTextEncoding` in `test/test_main.py` is the pattern. Always pass `encoding='utf-8'` on text-mode `open()` (plus `newline='\n'` on writes), and serialize any path that lands in a manifest/voices file with `as_posix()`.
+
+`.github/workflows/ci.yml` runs the suite on ubuntu/windows/macos × Python 3.10 and 3.12 (3.13 is blocked by `pydub` importing `audioop`, removed in that version), plus a ruff + mypy lint job, on every push to `main` and every PR.
+
 ## Pipeline (the big picture)
 
 `main.main()` (`src/zaphodvox/main.py`) orchestrates everything as an ordered set of optional stages driven by CLI flags. Reading `main()` top-to-bottom is the fastest way to understand control flow:

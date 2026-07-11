@@ -21,4 +21,4 @@ a text file into synthetic speech audio using a locally-hosted
 [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server.
 """
 
-__version__ = '2.0.1'
+__version__ = '2.1.0'
