@@ -16,6 +16,7 @@ from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.named_voices import NamedVoices
 from zaphodvox.arg_parser import parse_args
 from zaphodvox.llm import LLMClient, proofread
+from zaphodvox.paths import rebase_ref
 from zaphodvox.proof import ProofReport, proof_text
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import clean_text, parse_text
@@ -480,12 +481,17 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
     try:
         with open(str(voices_file), 'r', encoding='utf-8') as f:
             named = NamedVoices.model_validate_json(f.read())
+        anchor_voices(named.voices, voices_file.parent)
     except FileNotFoundError:
         pass
     voices = dict(named.voices or {})
     existed = voice_name in voices
     voices[voice_name] = voice
     named.voices = voices
+    # The new voice's path is relative to where the command was run; the ones
+    # already in the file are relative to the file. Rewrite both to the file, so
+    # a clip beside it stays a bare filename and the library stays movable.
+    rebase_voices([*voices.values()], voices_file.parent)
     with open(str(voices_file), 'w', encoding='utf-8', newline='\n') as f:
         f.write(named.model_dump_json(indent=4, exclude_none=True))
 
@@ -562,6 +568,40 @@ def add_word(args: Namespace, console: Console) -> None:
         console.print(f'No new words added to {dict_path}.')
 
 
+def anchor_voices(voices: Optional[dict[str, QwenVoice]], base_dir: Path) -> None:
+    """Anchors each voice's relative `ref_audio` to the directory of the file it
+    was read from.
+
+    Args:
+        voices: The named voices to anchor.
+        base_dir: The directory `Path` of the file the voices were read from.
+    """
+    for voice in (voices or {}).values():
+        voice.anchor(base_dir)
+
+
+def rebase_voices(voices: list[Optional[Voice]], target_dir: Path) -> None:
+    """Rewrites each voice's `ref_audio` in place so that it stays valid from
+    the file it is about to be written into.
+
+    A voice is routinely copied out of the file that declared it (a shared
+    voices file) and into another (a project's manifest). Its path is only
+    meaningful relative to an anchor, so moving the voice without rewriting the
+    path would silently repoint it at the wrong directory.
+
+    Args:
+        voices: The voices to rewrite. Non-Qwen and non-clone voices are
+            ignored.
+        target_dir: The directory `Path` of the file being written.
+    """
+    for voice in voices:
+        if isinstance(voice, QwenVoice) and voice.ref_audio:
+            voice.ref_audio = rebase_ref(
+                voice.ref_audio, voice.base_dir, target_dir
+            )
+            voice.anchor(target_dir)
+
+
 def read_text_manifest(
     inputfile: Optional[Path]
 ) -> tuple[str, Optional[Manifest]]:
@@ -583,6 +623,12 @@ def read_text_manifest(
                 manifest = Manifest.model_validate_json(text)
             except ValueError:
                 manifest = None
+        if manifest:
+            base_dir = inputfile.parent
+            anchor_voices(manifest.voices, base_dir)
+            for fragment in manifest.fragments:
+                if isinstance(fragment.voice, QwenVoice):
+                    fragment.voice.anchor(base_dir)
     return text, manifest
 
 
@@ -603,6 +649,7 @@ def read_voices(
         with open(str(path), 'r', encoding='utf-8') as file:
             voices_json = file.read()
         voices = NamedVoices.model_validate_json(voices_json)
+        anchor_voices(voices.voices, path.parent)
     if manifest:
         voices.add_voices(manifest.voices)
     return voices
@@ -738,10 +785,21 @@ def write_cleaned(text: str, file_path: Path) -> None:
 def write_manifest(manifest: Manifest, file_path: Path) -> None:
     """Writes the given manifest to the specified file path.
 
+    Voice reference paths are rewritten to stay valid from the manifest, since a
+    voice may have been read from a voices file in another directory. The copy is
+    deep so that rewriting them cannot disturb the in-memory manifest, which a
+    subsequent `--concat` still reads from.
+
     Args:
         manifest: The `Manifest` to be written.
         file_path: The `Path` to the output file where the manifest will be saved.
     """
+    manifest = manifest.model_copy(deep=True)
+    rebase_voices(
+        [*(manifest.voices or {}).values()]
+        + [f.voice for f in manifest.fragments],
+        file_path.parent
+    )
     with open(str(file_path), 'w', encoding='utf-8', newline='\n') as f:
         f.write(manifest.model_dump_json(indent=4, exclude_none=True))
 

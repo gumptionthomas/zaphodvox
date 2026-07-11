@@ -59,8 +59,13 @@ def parse_args(args: list) -> Namespace:
         '-f',
         '--voices-file',
         type=Path,
-        default=None,
-        help='A JSON file containing named voices'
+        default=os.environ.get('ZAPHODVOX_VOICES_FILE'),
+        help=(
+            'A JSON file containing named voices; a relative voice '
+            '"ref_audio" in it is resolved against its own directory, so it '
+            'can be a shared library used from any project '
+            '(default: $ZAPHODVOX_VOICES_FILE)'
+        )
     )
     parser.add_argument(
         '-n',

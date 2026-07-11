@@ -66,6 +66,28 @@ class QwenEncoder(Encoder):
             )
         return file_ext
 
+    def validate_voice(self, voice: Voice) -> None:
+        """Check that a clone voice's reference audio actually exists, before
+        any encoding begins.
+
+        Args:
+            voice: The `Voice` to validate.
+
+        Raises:
+            ValueError: If `voice` is not a `QwenVoice`, or if it clones a
+                reference audio file that cannot be found.
+        """
+        if not isinstance(voice, QwenVoice):
+            raise ValueError('Not a QwenVoice.')
+        ref_audio = voice.resolved_ref_audio
+        if ref_audio is not None and not ref_audio.is_file():
+            anchor = voice.base_dir or Path.cwd()
+            raise ValueError(
+                f'Reference audio "{voice.ref_audio}" not found at '
+                f'"{ref_audio.absolute()}" (relative paths are resolved '
+                f'against "{anchor}").'
+            )
+
     def t2s(self, text: str, voice: Voice, filepath: Path) -> None:
         """Convert text to speech using the specified voice and save it to the
         given filepath.
@@ -127,7 +149,8 @@ class QwenEncoder(Encoder):
             voice: The clone `QwenVoice` to use.
             filepath: The `Path` of the generated audio file.
         """
-        assert voice.ref_audio is not None
+        ref_audio = voice.resolved_ref_audio
+        assert ref_audio is not None
         data = {
             'input': text,
             'language': voice.language,
@@ -141,7 +164,7 @@ class QwenEncoder(Encoder):
             data['seed'] = str(voice.seed)
         if voice.temperature is not None:
             data['temperature'] = str(voice.temperature)
-        with open(voice.ref_audio, 'rb') as ref:
+        with open(str(ref_audio), 'rb') as ref:
             with requests.post(
                 f'{self._url}/v1/audio/speech/upload',
                 data=data,

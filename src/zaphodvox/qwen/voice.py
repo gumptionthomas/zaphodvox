@@ -1,8 +1,10 @@
 from argparse import Namespace
+from pathlib import Path
 from typing import Optional
 
-from pydantic import model_validator
+from pydantic import PrivateAttr, model_validator
 
+from zaphodvox.paths import resolve_ref
 from zaphodvox.voice import Voice
 
 
@@ -42,6 +44,12 @@ class QwenVoice(Voice):
     (lower is steadier and more repeatable, higher is more varied), not an
     expressiveness control. Defaults to `None` (the server's default)."""
 
+    _base_dir: Optional[Path] = PrivateAttr(default=None)
+    """The directory of the file this voice was read from, which a relative
+    `ref_audio` is resolved against. Deliberately private: it is a property of
+    *where the voice was read from*, not of the voice, and must never be
+    serialized back out."""
+
     @model_validator(mode='after')
     def _check_voice_source(self) -> 'QwenVoice':
         """Ensures the voice specifies exactly one source (preset, clone, or
@@ -64,6 +72,47 @@ class QwenVoice(Voice):
                 '"ref_audio", or "description".'
             )
         return self
+
+    def anchor(self, base_dir: Optional[Path]) -> 'QwenVoice':
+        """Anchors a relative `ref_audio` to the directory of the file that
+        declared this voice, so it no longer depends on the working directory
+        the command happens to be run from.
+
+        A voice with no `ref_audio` has nothing to anchor, and anchoring it
+        anyway would make two otherwise identical preset voices compare unequal
+        purely because they were read from different files.
+
+        Args:
+            base_dir: The directory `Path` of the voices file or manifest this
+                voice was read from. `None` anchors to the current working
+                directory (for a voice given on the command line).
+
+        Returns:
+            This voice, for chaining.
+        """
+        if self.ref_audio is not None:
+            self._base_dir = base_dir
+        return self
+
+    @property
+    def base_dir(self) -> Optional[Path]:
+        """The directory this voice's relative `ref_audio` is anchored to.
+
+        Returns:
+            The anchor directory `Path`, or `None` for the working directory.
+        """
+        return self._base_dir
+
+    @property
+    def resolved_ref_audio(self) -> Optional[Path]:
+        """The `ref_audio` path resolved against this voice's anchor.
+
+        Returns:
+            The resolved reference audio `Path`, or `None` if not a clone.
+        """
+        if self.ref_audio is None:
+            return None
+        return resolve_ref(self.ref_audio, self._base_dir)
 
     @property
     def is_clone(self) -> bool:
