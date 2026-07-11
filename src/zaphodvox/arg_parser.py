@@ -1,8 +1,8 @@
 import os
 from argparse import ArgumentParser, Namespace
-from pathlib import Path
 
 from zaphodvox.encoder import Encoder
+from zaphodvox.paths import expanded_path
 from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder  # noqa: F401
 
 
@@ -24,7 +24,7 @@ def parse_args(args: list) -> Namespace:
     )
     parser.add_argument(
         'inputfile',
-        type=Path,
+        type=expanded_path,
         nargs='?',
         help=(
             'The text file or manifest to encode '
@@ -41,7 +41,7 @@ def parse_args(args: list) -> Namespace:
     parser.add_argument(
         '-o',
         '--out-dir',
-        type=Path,
+        type=expanded_path,
         default=None,
         help=(
             'The directory in which to save all files '
@@ -58,7 +58,7 @@ def parse_args(args: list) -> Namespace:
     parser.add_argument(
         '-f',
         '--voices-file',
-        type=Path,
+        type=expanded_path,
         default=os.environ.get('ZAPHODVOX_VOICES_FILE'),
         help=(
             'A JSON file containing named voices; a relative voice '
@@ -120,7 +120,7 @@ def parse_args(args: list) -> Namespace:
     )
     parser.add_argument(
         '--clean-out',
-        type=Path,
+        type=expanded_path,
         default=None,
         help=(
             'The clean text output file '
@@ -135,7 +135,7 @@ def parse_args(args: list) -> Namespace:
     )
     parser.add_argument(
         '--plan-out',
-        type=Path,
+        type=expanded_path,
         default=None,
         help=(
             'The encoding plan manifest output file '
@@ -194,7 +194,7 @@ def parse_args(args: list) -> Namespace:
     )
     proof_group.add_argument(
         '--proof-out',
-        type=Path,
+        type=expanded_path,
         default=None,
         help=(
             'The proof report output file '
@@ -203,7 +203,7 @@ def parse_args(args: list) -> Namespace:
     )
     proof_group.add_argument(
         '--dict',
-        type=Path,
+        type=expanded_path,
         default=None,
         help=(
             'A project wordlist file of accepted spellings '
@@ -241,7 +241,7 @@ def parse_args(args: list) -> Namespace:
     )
     parser.add_argument(
         '--concat-out',
-        type=Path,
+        type=expanded_path,
         default=None,
         help=(
             'The concatenated audio output file '
@@ -257,7 +257,7 @@ def parse_args(args: list) -> Namespace:
     )
     parser.add_argument(
         '--manifest-out',
-        type=Path,
+        type=expanded_path,
         default=None,
         help=(
             'The manifest output file (default: '
@@ -289,7 +289,7 @@ def parse_args(args: list) -> Namespace:
     )
     qwen_group.add_argument(
         '--voice-ref-audio',
-        type=Path,
+        type=expanded_path,
         default=None,
         help='A reference audio file to clone (instead of a preset --voice-id)'
     )

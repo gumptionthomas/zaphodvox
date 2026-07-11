@@ -397,6 +397,17 @@ $ zaphodvox --voices-file=~/voices/library.json --encoder=qwen --encode --voice-
 
 `narrator.wav` is found next to `library.json`, wherever you run from. Point `ZAPHODVOX_VOICES_FILE` at the library once and you can drop the `--voices-file` argument entirely.
 
+When you audition a voice destined for the library, send the candidates there with `--out-dir`. Audition clips are written to `--out-dir` (or the current directory), *not* alongside the voices file — so auditioning inside a project and adopting from there would leave the shared library pointing at a clip inside that one project, which breaks for everyone else the day you move it:
+
+```console
+$ cd ~/books/hitchhiker
+$ zaphodvox --encoder=qwen --voice-id=Ryan --basename=narrator \
+    --audition=1-8 --audition-text="..." --out-dir ~/voices
+$ zaphodvox --adopt=5 --voice-name=Narrator ~/voices/narrator-audition.json
+```
+
+The adopted clip now sits beside `library.json` and is recorded as a bare `narrator-audition-05.wav`. Delete the candidates you didn't adopt.
+
 Because the library sits outside the project, the voice written into the project's manifest is rewritten to remain valid from *there* (as `~/voices/narrator.wav`), so the manifest can still re-encode itself later on its own. Within a directory the paths stay relative — `--adopt` writes a clip that sits beside the voices file as a bare `narrator.wav` — so the library as a whole stays self-contained and can be moved or committed as a unit.
 
 A missing reference clip is reported before encoding begins, rather than partway through a long book.
