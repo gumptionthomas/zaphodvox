@@ -103,7 +103,7 @@ class QwenVoice(Voice):
             voice_id=voice_id,
             language=args.voice_language,
             instruct=args.voice_instruct,
-            ref_audio=str(ref_audio) if ref_audio else None,
+            ref_audio=ref_audio.as_posix() if ref_audio else None,
             ref_text=args.voice_ref_text,
             description=description,
             seed=args.voice_seed,

@@ -9,6 +9,12 @@ from zaphodvox.main import main
 from zaphodvox.qwen.encoder import DEFAULT_URL
 
 
+# Text I/O is always UTF-8, never the locale codepage (cp1252 on Windows), and
+# writes are never newline-translated, so that generated files are portable.
+READ_KW = {'encoding': 'utf-8'}
+WRITE_KW = {'encoding': 'utf-8', 'newline': '\n'}
+
+
 AUDITION_INDEX = json.dumps([
     {'seed': 0, 'filename': 'ryan-audition-00.wav', 'voice_id': 'Ryan',
      'instruct': 'calm', 'language': 'English', 'temperature': 0.6,
@@ -60,9 +66,9 @@ class TestMain():
 
         # Verify
         # Input file
-        mock_builtins_open.assert_any_call('test.txt', 'r')
+        mock_builtins_open.assert_any_call('test.txt', 'r', **READ_KW)
         # Voices file
-        mock_builtins_open.assert_any_call('voices.json', 'r')
+        mock_builtins_open.assert_any_call('voices.json', 'r', **READ_KW)
         # Synthesis
         mock_qwen.post.assert_called_once_with(*speech_call(text_to_encode).args,
                                                **speech_call(text_to_encode).kwargs)
@@ -81,7 +87,7 @@ class TestMain():
         )
         # Manifest file
         mock_builtins_open.assert_any_call(
-            str(tmp_path / 'test-manifest.json'), 'w'
+            str(tmp_path / 'test-manifest.json'), 'w', **WRITE_KW
         )
         assert mock_write.call_count == 1
         assert mock_builtins_open.call_count == 3
@@ -110,7 +116,9 @@ class TestMain():
 
         # Verify
         # Input file
-        mock_builtins_open.assert_any_call('test-manifest.json', 'r')
+        mock_builtins_open.assert_any_call(
+            'test-manifest.json', 'r', **READ_KW
+        )
         # Two text fragments (#0 and #2) synthesized
         assert mock_qwen.post.call_count == 2
         # Fragment #0
@@ -130,7 +138,9 @@ class TestMain():
         mock_audio.segment.export.assert_any_call('test.wav', format='wav')
         assert mock_audio.segment.export.call_count == 2
         # Manifest file
-        mock_builtins_open.assert_any_call('test-manifest.json', 'w')
+        mock_builtins_open.assert_any_call(
+            'test-manifest.json', 'w', **WRITE_KW
+        )
         assert mock_write.call_count == 1
 
     def test_main_manifest_inline_voice(
@@ -183,7 +193,9 @@ class TestMain():
             main(sys_args)
 
         # Verify
-        mock_builtins_open.assert_called_once_with('test-manifest.json', 'r')
+        mock_builtins_open.assert_called_once_with(
+            'test-manifest.json', 'r', **READ_KW
+        )
         mock_qwen.post.assert_not_called()
         mock_audio.segment_cls.silent.assert_not_called()
         mock_audio.segment_cls.empty.assert_not_called()
@@ -214,7 +226,9 @@ class TestMain():
             main(sys_args)
 
         # Verify
-        mock_builtins_open.assert_called_once_with('test-manifest.json', 'r')
+        mock_builtins_open.assert_called_once_with(
+            'test-manifest.json', 'r', **READ_KW
+        )
         mock_qwen.post.assert_not_called()
         mock_audio.segment_cls.silent.assert_not_called()
         mock_audio.segment_cls.empty.assert_not_called()
@@ -244,7 +258,7 @@ class TestMain():
 
         # Verify
         # Input file
-        mock_builtins_open.assert_any_call('test.txt', 'r')
+        mock_builtins_open.assert_any_call('test.txt', 'r', **READ_KW)
         mock_builtins_open().read.assert_called_once()
         # 5 tries
         assert mock_qwen.post.call_count == 5
@@ -285,7 +299,7 @@ class TestMain():
 
         # Verify
         # Input file
-        mock_builtins_open.assert_any_call('test.txt', 'r')
+        mock_builtins_open.assert_any_call('test.txt', 'r', **READ_KW)
         mock_builtins_open().read.assert_called_once()
         # Synthesis succeeded once
         mock_qwen.post.assert_called_once_with(
@@ -303,7 +317,9 @@ class TestMain():
             'test.wav', format='wav'
         )
         # Manifest file written before concat
-        mock_builtins_open.assert_any_call('test-manifest.json', 'w')
+        mock_builtins_open.assert_any_call(
+            'test-manifest.json', 'w', **WRITE_KW
+        )
         assert mock_write.call_count == 1
         # System exit
         assert se.value.code == 1
@@ -424,7 +440,10 @@ class TestMain():
 
         # Verify
         expected_calls = [
-            call(filename, mode) for filename, mode in [
+            call(
+                filename, mode,
+                **(WRITE_KW if mode == 'w' else READ_KW)
+            ) for filename, mode in [
                 ('test.txt', 'r'),
                 ('test-clean.txt', 'w')
             ]
@@ -443,7 +462,10 @@ class TestMain():
 
         # Verify
         expected_calls = [
-            call(filename, mode) for filename, mode in [
+            call(
+                filename, mode,
+                **(WRITE_KW if mode == 'w' else READ_KW)
+            ) for filename, mode in [
                 ('test.txt', 'r'),
                 ('test-clean.txt', 'w')
             ]
@@ -468,7 +490,10 @@ class TestMain():
 
         # Verify
         expected_calls = [
-            call(filename, mode) for filename, mode in [
+            call(
+                filename, mode,
+                **(WRITE_KW if mode == 'w' else READ_KW)
+            ) for filename, mode in [
                 ('test.txt', 'r'),
                 ('test-plan.json', 'w')
             ]
@@ -524,7 +549,9 @@ class TestAudition():
             )
         assert mock_qwen.write_bytes.call_count == 3
         # The index file is written.
-        mock_builtins_open.assert_any_call('ryan-audition.json', 'w')
+        mock_builtins_open.assert_any_call(
+            'ryan-audition.json', 'w', **WRITE_KW
+        )
 
     def test_audition_applies_temperature(self, mock_qwen, mock_builtins_open):
         # --voice-temperature is fixed across all candidates (seed varies).
@@ -570,7 +597,9 @@ class TestAudition():
         seeds = [c.kwargs['json']['seed'] for c in mock_qwen.post.call_args_list]
         assert seeds == [0, 1]
         # basename defaults to 'design' when there is no input file or voice id.
-        mock_builtins_open.assert_any_call('design-audition.json', 'w')
+        mock_builtins_open.assert_any_call(
+            'design-audition.json', 'w', **WRITE_KW
+        )
         mock_qwen.write_bytes.assert_any_call(
             Path('design-audition-00.wav'), b'audio'
         )
@@ -697,7 +726,7 @@ class TestAdopt():
         main(sys_args)
 
         # Verify: a clone entry is written, resolving the clip beside the index.
-        mock_builtins_open.assert_any_call('voices.json', 'w')
+        mock_builtins_open.assert_any_call('voices.json', 'w', **WRITE_KW)
         written = json.loads(mock_write.call_args[0][0])
         assert written == {
             'voices': {
@@ -820,3 +849,45 @@ class TestProof():
         report = json.loads((tmp_path / 'book-proof.json').read_text())
         assert any(f['source'] == 'llm' for f in report['findings'])
         assert report['summary'].get('proofread') == 1
+
+
+class TestTextEncoding():
+    """Round-trips real files through the CLI.
+
+    The rest of the suite patches `builtins.open`, so it cannot catch a text
+    file being read or written in the locale codepage (cp1252 on Windows)
+    instead of UTF-8.
+    """
+
+    # Smart quotes and an em-dash (which cp1252 can represent) plus a check
+    # mark (which it cannot), so this fixture fails under any non-UTF-8
+    # codepage, on either the read or the write side.
+    UTF8_TEXT = (
+        'He said, “it’s a café”—then left. ✓\n'
+    )
+
+    def test_clean_reads_utf8_text(self, tmp_path, monkeypatch):
+        # Setup
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text(self.UTF8_TEXT, encoding='utf-8')
+
+        # Run
+        main(['--clean', 'book.txt'])
+
+        # Verify: the manuscript was read, and unidecode folded it to ASCII.
+        cleaned = (tmp_path / 'book-clean.txt').read_text(encoding='utf-8')
+        assert 'cafe' in cleaned
+
+    def test_plan_writes_utf8_json_with_lf_newlines(self, tmp_path, monkeypatch):
+        # Setup
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text(self.UTF8_TEXT, encoding='utf-8')
+
+        # Run: --plan keeps the original (non-ASCII) text in the manifest.
+        main(['--encoder=qwen', '--voice-id=Ryan', '--plan', 'book.txt'])
+
+        # Verify: valid UTF-8, non-ASCII intact, and no CRLF translation.
+        raw = (tmp_path / 'book-plan.json').read_bytes()
+        plan = raw.decode('utf-8')
+        assert '✓' in plan
+        assert b'\r\n' not in raw
