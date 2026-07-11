@@ -6,6 +6,7 @@ import requests
 from tenacity import Retrying, stop_after_attempt
 
 from zaphodvox.encoder import Encoder
+from zaphodvox.paths import abspath
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.voice import Voice
 
@@ -81,10 +82,10 @@ class QwenEncoder(Encoder):
             raise ValueError('Not a QwenVoice.')
         ref_audio = voice.resolved_ref_audio
         if ref_audio is not None and not ref_audio.is_file():
-            anchor = voice.base_dir or Path.cwd()
+            anchor = abspath(voice.base_dir or Path.cwd())
             raise ValueError(
                 f'Reference audio "{voice.ref_audio}" not found at '
-                f'"{ref_audio.absolute()}" (relative paths are resolved '
+                f'"{abspath(ref_audio)}" (relative paths are resolved '
                 f'against "{anchor}").'
             )
 

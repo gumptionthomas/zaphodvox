@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from zaphodvox.paths import rebase_ref, resolve_ref
+from zaphodvox.paths import abspath, rebase_ref, resolve_ref
 
 
 @pytest.fixture
@@ -18,6 +18,24 @@ def fake_home(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv('HOME', str(home))
     monkeypatch.setenv('USERPROFILE', str(home))
     return home
+
+
+class TestAbspath():
+    def test_collapses_dot_segments(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'lib').mkdir()
+
+        assert abspath(Path('books/../lib')) == tmp_path / 'lib'
+
+    def test_bare_relative_becomes_the_working_directory(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        assert abspath(Path('.')) == tmp_path
+
+    def test_absolute_is_unchanged(self, tmp_path):
+        assert abspath(tmp_path / 'lib') == tmp_path / 'lib'
 
 
 class TestResolveRef():
