@@ -11,7 +11,7 @@ Install the latest release from PyPI:
 ```console
 $ pip install zaphodvox
 ...
-Successfully installed zaphodvox-2.1.0...
+Successfully installed zaphodvox-2.2.0...
 
 $ zaphodvox test.txt
 Nothing to do... I'd give you advice, but you wouldn't listen. No one ever does.
@@ -241,7 +241,7 @@ These findings are merged into the same report with `source: "llm"`. Only a **lo
 
 > "I'm so great even I get tongue-tied talking to myself."
 
-Multiple voice configurations can be defined in a JSON file and loaded via the `--voices-file` argument.
+Multiple voice configurations can be defined in a JSON file and loaded via the `--voices-file` argument (which defaults to the `ZAPHODVOX_VOICES_FILE` environment variable).
 
 This is an example voice configuration file (`voices.json`):
 
@@ -321,7 +321,7 @@ The fields are:
 - `voice_id`: The built-in preset speaker name (one of `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, `Sohee`). Mutually exclusive with `ref_audio`/`description`.
 - `language`: The language of the text (defaults to `English`).
 - `instruct`: An optional style/emotion direction for a preset voice (e.g. `calm, wry`). Ignored for cloned/designed voices.
-- `ref_audio`: The path to a reference audio file to clone. Mutually exclusive with `voice_id`/`description`.
+- `ref_audio`: The path to a reference audio file to clone. Mutually exclusive with `voice_id`/`description`. A relative path is resolved against the directory of the file it is written in (see [A shared voice library](#a-shared-voice-library)), an absolute path or a `~/`-prefixed one is used as-is.
 - `ref_text`: The transcript of `ref_audio`. If set, the higher-quality in-context (ICL) clone mode is used; otherwise a true zero-shot clone is used.
 - `description`: A natural-language description of a voice to design (e.g. `a warm elderly woman`). Mutually exclusive with `voice_id`/`ref_audio`.
 - `seed`: An optional fixed RNG seed. When set, every fragment using this voice is synthesized from the same seed, keeping the voice consistent across chunks and across re-encodes. Defaults to non-deterministic.
@@ -356,6 +356,30 @@ A design example:
     "temperature": 0.6
 }
 ```
+
+### A shared voice library
+
+> "The ships hung in the sky in much the same way that bricks don't."
+
+A clone's `ref_audio` is resolved **relative to the file that declares it**, not to the directory you happen to run from. That means a voices file and its reference clips can live together in one place and be used from any project:
+
+```console
+~/voices/
+    library.json        ["Narrator" -> "narrator.wav", "Trillian" -> "trillian.wav"]
+    narrator.wav
+    trillian.wav
+```
+
+```console
+$ cd ~/books/hitchhiker
+$ zaphodvox --voices-file=~/voices/library.json --encoder=qwen --encode --voice-name=Narrator book.txt
+```
+
+`narrator.wav` is found next to `library.json`, wherever you run from. Point `ZAPHODVOX_VOICES_FILE` at the library once and you can drop the `--voices-file` argument entirely.
+
+Because the library sits outside the project, the voice written into the project's manifest is rewritten to remain valid from *there* (as `~/voices/narrator.wav`), so the manifest can still re-encode itself later on its own. Within a directory the paths stay relative — `--adopt` writes a clip that sits beside the voices file as a bare `narrator.wav` — so the library as a whole stays self-contained and can be moved or committed as a unit.
+
+A missing reference clip is reported before encoding begins, rather than partway through a long book.
 
 ## Manifest
 

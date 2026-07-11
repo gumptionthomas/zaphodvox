@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from zaphodvox.audio import create_silence
-from zaphodvox.manifest import Manifest
+from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.progress import ProgressBar
 from zaphodvox.voice import Voice
 
@@ -69,6 +69,43 @@ class Encoder(ABC):
         """
         raise NotImplementedError
 
+    @staticmethod
+    def fragment_voice(
+        fragment: Fragment, voices: dict[str, Optional[Voice]]
+    ) -> Voice:
+        """Resolve the `Voice` a fragment will be spoken with: its own inline
+        voice, else the named voice it refers to.
+
+        Args:
+            fragment: The `Fragment` to resolve a `Voice` for.
+            voices: A dictionary of name/`Voice` pairs.
+
+        Returns:
+            The `Voice` for the fragment.
+
+        Raises:
+            ValueError: If the fragment has no voice.
+        """
+        voice = fragment.voice
+        if (not voice) and fragment.voice_name:
+            voice = voices.get(fragment.voice_name)
+        if voice is None:
+            raise ValueError('No voice specified.')
+        return voice
+
+    def validate_voice(self, voice: Voice) -> None:
+        """Check that a `Voice` can actually be synthesized, before any encoding
+        begins. The default accepts every voice; subclasses override to verify
+        whatever they depend on (a reference audio file, say).
+
+        Args:
+            voice: The `Voice` to validate.
+
+        Raises:
+            ValueError: If the voice cannot be used.
+        """
+        return None
+
     def encode_manifest(
         self, manifest: Manifest, encode_dir: Optional[Path] = None,
         indexes: Optional[list[int]] = None,
@@ -93,6 +130,11 @@ class Encoder(ABC):
         voices = voices or {}
         indexes = indexes or list(range(manifest.length))
         fragments = [manifest.fragments[i] for i in indexes]
+        # Resolve and check every voice up front: a bad reference should fail
+        # on the command line, not two hundred fragments into a long encode.
+        for fragment in fragments:
+            if fragment.filename is not None and fragment.text:
+                self.validate_voice(self.fragment_voice(fragment, voices))
         total_chars = sum([len(s.text) for s in fragments])
         with ProgressBar('Encoding', total=total_chars) as bar:
             for fragment in fragments:
@@ -110,10 +152,7 @@ class Encoder(ABC):
                                 self.break_tag(duration),
                                 fragment.text
                             )
-                        if (not fragment.voice) and fragment.voice_name:
-                            fragment.voice = voices.get(fragment.voice_name)
-                        if fragment.voice is None:
-                            raise ValueError('No voice specified.')
+                        fragment.voice = self.fragment_voice(fragment, voices)
                         self.t2s(fragment.text, fragment.voice, filepath)
                         bar.next(n=num_chars)
                     elif duration:
