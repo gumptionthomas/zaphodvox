@@ -4,6 +4,7 @@ from unittest.mock import call, mock_open, patch
 
 import pytest
 
+from zaphodvox import __version__
 from zaphodvox.arg_parser import parse_args
 from zaphodvox.main import main
 from zaphodvox.qwen.encoder import DEFAULT_URL
@@ -337,7 +338,7 @@ class TestMain():
         # Verify
         assert se.value.code == 0
         out, _ = capfd.readouterr()
-        assert 'version 2.0.1' in out
+        assert f'version {__version__}' in out
 
     def test_nothing_to_do(self, capfd, mock_builtins_open):
         # Setup
