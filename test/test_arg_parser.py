@@ -94,3 +94,47 @@ class TestArgParser():
     def test_invalid_audio_format(self):
         with (pytest.raises(SystemExit), redirect_stderr(StringIO())):
             parse_args(['--qwen-audio-format=ogg', 'test.txt'])
+
+
+class TestTildeExpansion():
+    """The shell expands a leading `~` in only some of the spellings people
+    actually use, so the parser has to handle the rest itself.
+    """
+
+    @pytest.fixture
+    def fake_home(self, tmp_path, monkeypatch) -> Path:
+        monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setenv('USERPROFILE', str(tmp_path))
+        return tmp_path
+
+    def test_tilde_in_joined_option_is_expanded(self, fake_home):
+        # `--out-dir ~/voices` is expanded by the shell, but `--out-dir=~/voices`
+        # is not -- and would otherwise create a directory named `~`.
+        args = parse_args([
+            '--out-dir=~/voices',
+            '--voice-ref-audio=~/clips/narrator.wav',
+            '~/book.txt',
+        ])
+
+        assert args.out_dir == fake_home / 'voices'
+        assert args.voice_ref_audio == fake_home / 'clips' / 'narrator.wav'
+        assert args.inputfile == fake_home / 'book.txt'
+
+    def test_tilde_from_env_var_default_is_expanded(
+        self, fake_home, monkeypatch
+    ):
+        # A quoted assignment (ZAPHODVOX_VOICES_FILE="~/...") reaches us with the
+        # tilde intact, because the shell only expands an unquoted one.
+        monkeypatch.setenv(
+            'ZAPHODVOX_VOICES_FILE', '~/voices/voices.json'
+        )
+
+        args = parse_args(['book.txt'])
+
+        assert args.voices_file == fake_home / 'voices' / 'voices.json'
+
+    def test_ordinary_paths_are_untouched(self, fake_home):
+        args = parse_args(['--out-dir=out', 'book.txt'])
+
+        assert args.out_dir == Path('out')
+        assert args.inputfile == Path('book.txt')
