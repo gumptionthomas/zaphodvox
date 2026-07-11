@@ -101,9 +101,13 @@ class TestVoiceLibrary():
         manifest = json.loads(
             (project / 'book-manifest.json').read_text(encoding='utf-8')
         )
+        # Whether it was rewritten absolute or `~`-anchored depends on where the
+        # temp directory falls relative to the home directory (on Windows it is
+        # inside it), so assert the invariant rather than the spelling: it is no
+        # longer the bare library filename, and it still points at the clip.
         ref_audio = manifest['fragments'][0]['voice']['ref_audio']
         assert ref_audio != 'narrator.wav'
-        assert Path(ref_audio) == library / 'narrator.wav'
+        assert Path(ref_audio).expanduser() == library / 'narrator.wav'
 
     def test_zvox_tagged_manifest_reencodes_on_its_own(
         self, library, project, mock_qwen, mock_progress_bar
