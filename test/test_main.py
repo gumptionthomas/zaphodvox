@@ -635,14 +635,54 @@ class TestAudition():
         assert se.value.code == 1
         assert 'requires a preset' in capfd.readouterr()[0]
 
-    def test_audition_rejects_clone(self, capfd, mock_qwen):
+    def test_audition_re_clones_a_reference(
+        self, mock_qwen, mock_builtins_open, monkeypatch
+    ):
+        # Setup: audition an existing clone. The candidates are synthetic takes
+        # of it, so adopting one re-anchors the voice to clean studio audio --
+        # which is how a noisy human recording gets laundered into a reference.
+        # The reference is never really on disk here, so satisfy the pre-encode
+        # existence check (covered for real in test_voice_library.py).
+        monkeypatch.setattr(Path, 'is_file', lambda self: True)
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-ref-audio=narrator.wav',
+            '--voice-ref-text=A sample sentence.',
+            '--basename=narrator',
+            '--audition=1-2',
+            '--audition-text=A sufficiently long sample sentence for the '
+            'narrator so the reference clip is a usable length for cloning.',
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: it went to the clone endpoint, once per seed, uploading the
+        # source recording and carrying its transcript (so ICL mode is used).
+        assert mock_qwen.post.call_count == 2
+        urls = [c.args[0] for c in mock_qwen.post.call_args_list]
+        assert all(url.endswith('/v1/audio/speech/upload') for url in urls)
+        seeds = [c.kwargs['data']['seed'] for c in mock_qwen.post.call_args_list]
+        assert seeds == ['1', '2']
+        for post in mock_qwen.post.call_args_list:
+            assert post.kwargs['data']['ref_text'] == 'A sample sentence.'
+
+    def test_audition_rejects_two_voice_sources(self, capfd, mock_qwen):
         with pytest.raises(SystemExit) as se:
             main([
                 '--encoder=qwen', '--voice-id=Ryan', '--voice-ref-audio=ref.wav',
                 '--audition=2', '--audition-text=hello'
             ])
         assert se.value.code == 1
-        assert 'do not supply' in capfd.readouterr()[0]
+        assert 'exactly one' in capfd.readouterr()[0]
+
+    def test_audition_requires_a_voice_source(self, capfd, mock_qwen):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--audition=2', '--audition-text=hello'
+            ])
+        assert se.value.code == 1
+        assert 'requires' in capfd.readouterr()[0]
 
     def test_audition_rejects_other_actions(self, capfd, mock_qwen):
         with pytest.raises(SystemExit) as se:

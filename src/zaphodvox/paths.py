@@ -19,6 +19,26 @@ def abspath(path: Path) -> Path:
     return Path(os.path.normpath(path.absolute()))
 
 
+def expanded_path(value: str) -> Path:
+    """Converts a command-line argument to a `Path`, expanding a leading `~`.
+
+    The shell only expands a tilde in some of the spellings people actually use:
+    `--out-dir ~/voices` is expanded before the program ever sees it, but
+    `--out-dir=~/voices` is not, and neither is a quoted environment variable
+    (`ZAPHODVOX_VOICES_FILE="~/voices/voices.json"`). Left alone, those arrive as
+    a literal `~`, and the program would go looking for -- or worse, create -- a
+    directory actually named `~`.
+
+    Args:
+        value: The path as given on the command line or in an environment
+            variable.
+
+    Returns:
+        The `Path`, with a leading `~` expanded to the home directory.
+    """
+    return Path(value).expanduser()
+
+
 def resolve_ref(raw: str, base_dir: Optional[Path] = None) -> Path:
     """Resolves a stored reference path against the directory of the file that
     declared it.
