@@ -1,3 +1,4 @@
+import io
 import json
 import sys
 from argparse import Namespace
@@ -35,6 +36,11 @@ def main(
         ValueError: If the specified encoder is not found.
     """
     args: Namespace = preparsed_args or parse_args(raw_args or sys.argv[1:])
+    # Manuscripts routinely contain characters the Windows console codepage
+    # (cp1252) cannot encode, and `--proof` quotes the offending text back at
+    # the user. Replace the unencodable rather than raise.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     console = Console(highlight=False)
     handle_version_and_ntd(args, console)
     try:
@@ -406,7 +412,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
         for seed, fragment in zip(seeds, fragments)
     ]
     index_fp = file_path(None, f'{basename}-audition.json', out_dir)
-    with open(str(index_fp), 'w') as f:
+    with open(str(index_fp), 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(index, indent=4))
 
     if description:
@@ -458,7 +464,7 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
         raise ValueError(f'No audition candidate for seed {seed}.')
 
     inputfile: Path = args.inputfile
-    ref_audio = str(inputfile.parent / entry['filename'])
+    ref_audio = (inputfile.parent / entry['filename']).as_posix()
     voice = QwenVoice(
         ref_audio=ref_audio,
         ref_text=entry.get('text'),
@@ -472,7 +478,7 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
 
     named = NamedVoices()
     try:
-        with open(str(voices_file), 'r') as f:
+        with open(str(voices_file), 'r', encoding='utf-8') as f:
             named = NamedVoices.model_validate_json(f.read())
     except FileNotFoundError:
         pass
@@ -480,7 +486,7 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
     existed = voice_name in voices
     voices[voice_name] = voice
     named.voices = voices
-    with open(str(voices_file), 'w') as f:
+    with open(str(voices_file), 'w', encoding='utf-8', newline='\n') as f:
         f.write(named.model_dump_json(indent=4, exclude_none=True))
 
     verb = 'Updated' if existed else 'Added'
@@ -511,7 +517,7 @@ def proof(args: Namespace, text: str, console: Console) -> None:
     report.source_file = str(args.inputfile)
 
     fp = file_path(args.proof_out, f'{basename}-proof.json', out_dir)
-    with open(str(fp), 'w') as f:
+    with open(str(fp), 'w', encoding='utf-8', newline='\n') as f:
         f.write(report.model_dump_json(indent=4, exclude_none=True))
 
     total = len(report.findings)
@@ -571,7 +577,7 @@ def read_text_manifest(
     text = ''
     manifest = None
     if inputfile:
-        with open(str(inputfile), 'r') as file:
+        with open(str(inputfile), 'r', encoding='utf-8') as file:
             text = file.read()
             try:
                 manifest = Manifest.model_validate_json(text)
@@ -594,7 +600,7 @@ def read_voices(
     """
     voices = NamedVoices()
     if path:
-        with open(str(path), 'r') as file:
+        with open(str(path), 'r', encoding='utf-8') as file:
             voices_json = file.read()
         voices = NamedVoices.model_validate_json(voices_json)
     if manifest:
@@ -725,7 +731,7 @@ def write_cleaned(text: str, file_path: Path) -> None:
         manifest: The `Manifest` to be written.
         file_path: The `Path` to the output file where the manifest will be saved.
     """
-    with open(str(file_path), 'w') as f:
+    with open(str(file_path), 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
 
 
@@ -736,7 +742,7 @@ def write_manifest(manifest: Manifest, file_path: Path) -> None:
         manifest: The `Manifest` to be written.
         file_path: The `Path` to the output file where the manifest will be saved.
     """
-    with open(str(file_path), 'w') as f:
+    with open(str(file_path), 'w', encoding='utf-8', newline='\n') as f:
         f.write(manifest.model_dump_json(indent=4, exclude_none=True))
 
 

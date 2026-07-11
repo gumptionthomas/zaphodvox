@@ -3,6 +3,7 @@ from unittest.mock import call
 import pytest
 from pydantic import ValidationError
 
+from zaphodvox.arg_parser import parse_args
 from zaphodvox.manifest import Manifest
 from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder
 from zaphodvox.qwen.voice import QwenVoice
@@ -322,3 +323,13 @@ class TestEncoder():
     def test_qwen_voice_is_design(self):
         assert QwenVoice(description='a calm narrator').is_design is True
         assert QwenVoice(voice_id='Ryan').is_design is False
+
+    def test_qwen_voice_from_args_ref_audio_is_posix(self):
+        args = parse_args(
+            ['--encode', '--voice-ref-audio', 'refs/ryan.wav', 'test.txt']
+        )
+
+        voice = QwenVoice.from_args(args)
+
+        assert voice is not None
+        assert voice.ref_audio == 'refs/ryan.wav'

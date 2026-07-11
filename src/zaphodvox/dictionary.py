@@ -18,7 +18,7 @@ def _read_words(path: Optional[Path]) -> list[str]:
     if not path:
         return words
     try:
-        with open(str(path), 'r') as file:
+        with open(str(path), 'r', encoding='utf-8') as file:
             for line in file:
                 word = line.split('#', 1)[0].strip()
                 if word:
@@ -60,7 +60,7 @@ def add_words(path: Path, new_words: list[str]) -> list[str]:
             seen.add(word.lower())
             added.append(word)
     words = sorted(set(words), key=str.lower)
-    with open(str(path), 'w') as file:
+    with open(str(path), 'w', encoding='utf-8', newline='\n') as file:
         file.write('\n'.join(words) + '\n')
     return added
 

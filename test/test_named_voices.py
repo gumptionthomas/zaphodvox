@@ -18,7 +18,9 @@ class TestLoadNamedVoices():
         voices = read_voices(filepath, None)
 
         # Verify
-        mock_builtins_open.assert_called_once_with(str(filepath), 'r')
+        mock_builtins_open.assert_called_once_with(
+            str(filepath), 'r', encoding='utf-8'
+        )
         encoder_voices = voices.encoder_voices()
         assert encoder_voices == {
             'voice_1': qwen_voice,
