@@ -189,6 +189,16 @@ def parse_args(args: list) -> Namespace:
         )
     )
     parser.add_argument(
+        '--add-voice',
+        default=None,
+        metavar='NAME',
+        help=(
+            'Add (or update) the voice described by the --voice-* options to '
+            '--voices-file under NAME; a reference clip from outside the '
+            'library is copied into --clips-dir'
+        )
+    )
+    parser.add_argument(
         '--adopt',
         type=int,
         default=None,
