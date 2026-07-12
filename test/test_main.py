@@ -773,7 +773,11 @@ class TestAdopt():
 
         # Verify: the clip is copied in under the voice's own name, and the
         # entry references it rather than the audition candidate in refs/.
-        mock_builtins_open.assert_any_call('refs/ryan-audition-01.wav', 'rb')
+        # `open` gets native separators (a backslash on Windows); only the
+        # serialized `ref_audio` is POSIX.
+        mock_builtins_open.assert_any_call(
+            str(Path('refs/ryan-audition-01.wav')), 'rb'
+        )
         mock_builtins_open.assert_any_call('Narrator.wav', 'wb')
         mock_builtins_open.assert_any_call('voices.json', 'w', **WRITE_KW)
         written = json.loads(mock_write.call_args[0][0])
