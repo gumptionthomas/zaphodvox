@@ -74,6 +74,17 @@ def parse_args(args: list) -> Namespace:
         help='The voice name in the `voices-file` to use'
     )
     parser.add_argument(
+        '--clips-dir',
+        type=expanded_path,
+        default=os.environ.get('ZAPHODVOX_CLIPS_DIR'),
+        help=(
+            'The directory --adopt copies a reference clip into, created if '
+            "needed; a relative path is taken from the --voices-file's own "
+            'directory, so "clips" keeps a voices library tidy '
+            '(default: $ZAPHODVOX_CLIPS_DIR, else beside the voices file)'
+        )
+    )
+    parser.add_argument(
         '-m',
         '--max-chars',
         type=int,

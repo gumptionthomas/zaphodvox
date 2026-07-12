@@ -410,6 +410,22 @@ $ rm -rf refs
 
 `library.json` now records `"ref_audio": "Narrator.wav"`, sitting right next to it. Note that audition clips are written to `--out-dir` (or the current directory) and never alongside the voices file, so this also keeps you from adopting a clip that lives inside one project's directory — which would break the shared library for every other project the day you moved it.
 
+To keep the clips in their own subdirectory, point `--adopt` at one with `--clips-dir` (created if it doesn't exist). A relative path is taken from the voices file's own directory, since it describes the library's layout rather than where you happen to be standing:
+
+```console
+~/voices/
+    voices.json         ["Narrator" -> "clips/Narrator.wav"]
+    clips/Narrator.wav
+    clips/Trillian.wav
+```
+
+```console
+$ zaphodvox --adopt=5 --voice-name=Narrator --clips-dir clips ref/narrator-audition.json
+    Copied ref/narrator-audition-05.wav -> clips/Narrator.wav
+```
+
+The reference is recorded relative to the voices file (`"clips/Narrator.wav"`), so the library still moves as a unit. Set `ZAPHODVOX_CLIPS_DIR=clips` alongside `ZAPHODVOX_VOICES_FILE` and you never have to pass it.
+
 Because the library sits outside the project, the voice written into the project's manifest is rewritten to remain valid from *there* (as `~/voices/narrator.wav`), so the manifest can still re-encode itself later on its own. Within a directory the paths stay relative — `--adopt` writes a clip that sits beside the voices file as a bare `narrator.wav` — so the library as a whole stays self-contained and can be moved or committed as a unit.
 
 A missing reference clip is reported before encoding begins, rather than partway through a long book.

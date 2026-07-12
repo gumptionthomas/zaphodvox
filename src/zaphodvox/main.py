@@ -486,7 +486,10 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
 
     inputfile: Path = args.inputfile
     candidate = inputfile.parent / entry['filename']
-    clip = voices_file.parent / clip_filename(voice_name, candidate.suffix)
+    # A relative --clips-dir belongs to the voices file, not to wherever the
+    # command was run: it is part of the library's own layout.
+    clips_dir: Path = voices_file.parent / (args.clips_dir or Path('.'))
+    clip = clips_dir / clip_filename(voice_name, candidate.suffix)
     copied = copy_clip(candidate, clip)
     voice = QwenVoice(
         ref_audio=clip.as_posix(),
@@ -621,6 +624,7 @@ def copy_clip(source: Path, dest: Path) -> bool:
         raise ValueError(f'Audition candidate "{source}" not found.')
     if abspath(source) == abspath(dest):
         return False
+    dest.parent.mkdir(parents=True, exist_ok=True)
     with open(str(source), 'rb') as f_in:
         data = f_in.read()
     with open(str(dest), 'wb') as f_out:
