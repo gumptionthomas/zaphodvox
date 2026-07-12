@@ -3,6 +3,22 @@ from pathlib import Path
 from typing import Optional
 
 
+def abspath(path: Path) -> Path:
+    """Makes a path absolute and collapses any `.`/`..` segments.
+
+    `Path.absolute()` alone keeps the segments verbatim, so a path anchored to
+    `../lib` stays spelled that way -- fine to open, but noise in a message and
+    not comparable with `relative_to()`.
+
+    Args:
+        path: The `Path` to normalize.
+
+    Returns:
+        The absolute, normalized `Path`.
+    """
+    return Path(os.path.normpath(path.absolute()))
+
+
 def expanded_path(value: str) -> Path:
     """Converts a command-line argument to a `Path`, expanding a leading `~`.
 
@@ -73,8 +89,8 @@ def rebase_ref(
     Returns:
         The rewritten reference path, in POSIX form.
     """
-    resolved = Path(os.path.normpath(resolve_ref(raw, base_dir).absolute()))
-    target = Path(os.path.normpath(target_dir.absolute()))
+    resolved = abspath(resolve_ref(raw, base_dir))
+    target = abspath(target_dir)
     try:
         return resolved.relative_to(target).as_posix()
     except ValueError:

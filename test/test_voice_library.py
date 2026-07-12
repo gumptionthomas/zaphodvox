@@ -173,6 +173,31 @@ class TestVoiceLibrary():
         assert 'narrator.wav' in out
         assert not mock_qwen.post.called
 
+    def test_missing_reference_audio_names_the_anchor_directory(
+        self, library, project, monkeypatch, mock_qwen, mock_progress_bar,
+        capfd
+    ):
+        # Setup: run from the library, naming the voices file bare, so its
+        # directory is `.` -- an anchor that tells the reader nothing.
+        (library / 'narrator.wav').unlink()
+        monkeypatch.chdir(library)
+
+        # Run
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder-name', 'qwen', '--encode',
+                '-f', 'library.json', '-n', 'narrator',
+                str(project / 'book.txt'),
+            ])
+
+        # Verify: the anchor is the directory itself, not `.`. Compare with
+        # whitespace stripped, since the console wraps long paths.
+        assert se.value.code == 1
+        out, _ = capfd.readouterr()
+        printed = ''.join(out.split())
+        assert 'resolvedagainst"."' not in printed
+        assert ''.join(str(library).split()) in printed
+
 
 class TestAdoptPaths():
     """`--adopt` writes a clone voice into a voices file."""
