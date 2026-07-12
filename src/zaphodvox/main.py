@@ -57,6 +57,11 @@ def main(
                 args.basename = args.voice_id.lower()
             elif args.voice_description:
                 args.basename = 'design'
+        if args.out_dir:
+            # Otherwise the first fragment fails on a missing directory, having
+            # already been synthesized. `--adopt` creates its clips directory;
+            # this is the same courtesy.
+            args.out_dir.mkdir(parents=True, exist_ok=True)
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
 
