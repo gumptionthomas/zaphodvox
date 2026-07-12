@@ -425,7 +425,12 @@ class TestAddVoice():
             'exaggeration': 0.6,
             'seed': 42,
         }
-        assert not (library / 'clips' / 'Narrator.wav').exists()
+        # Compare the directory's actual entries: `Path.exists()` answers for
+        # `narrator.wav` on a case-insensitive filesystem (macOS, Windows), and
+        # would report a copy that never happened.
+        assert [p.name for p in (library / 'clips').iterdir()] == [
+            'narrator.wav'
+        ]
 
     def test_a_clip_from_outside_is_copied_in(
         self, library, tmp_path, capfd
