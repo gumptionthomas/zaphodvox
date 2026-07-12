@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from zaphodvox.audio import create_silence
+from zaphodvox.audio import AudioParams, audio_params, create_silence
 from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.progress import ProgressBar
 from zaphodvox.voice import Voice
@@ -136,13 +136,11 @@ class Encoder(ABC):
             if fragment.filename is not None and fragment.text:
                 self.validate_voice(self.fragment_voice(fragment, voices))
         total_chars = sum([len(s.text) for s in fragments])
+        silences: list[tuple[int, Path]] = []
         with ProgressBar('Encoding', total=total_chars) as bar:
             for fragment in fragments:
                 if fragment.filename is not None:
-                    filepath = Path(fragment.filename)
-                    if encode_dir:
-                        filepath = encode_dir / filepath.name
-                    filepath = filepath.with_suffix(f'.{self.file_extension}')
+                    filepath = self.fragment_path(fragment.filename, encode_dir)
                     if (duration := silence_duration) is None:
                         duration = fragment.silence_duration
                     if (num_chars := len(fragment.text)) > 0:
@@ -156,13 +154,64 @@ class Encoder(ABC):
                         self.t2s(fragment.text, fragment.voice, filepath)
                         bar.next(n=num_chars)
                     elif duration:
-                        create_silence(duration, filepath, self.file_extension)
+                        # Held back until the speech exists to copy the sample
+                        # format from -- see `silence_params()`.
+                        silences.append((duration, filepath))
                     fragment.encoded = datetime.now(timezone.utc)
                     fragment.filename = filepath.name
                     fragment.encoder = self.name
                     fragment.silence_duration = duration
                     fragment.audio_format = self.audio_format
+        if silences:
+            params = self.silence_params(manifest, encode_dir)
+            for duration, filepath in silences:
+                create_silence(
+                    duration, filepath, self.file_extension, params
+                )
         return manifest
+
+    def fragment_path(
+        self, filename: str, encode_dir: Optional[Path] = None
+    ) -> Path:
+        """The `Path` a fragment's audio is written to.
+
+        Args:
+            filename: The fragment's file name.
+            encode_dir: The directory `Path` the audio files are saved to.
+
+        Returns:
+            The `Path` of the fragment's audio file.
+        """
+        filepath = Path(filename)
+        if encode_dir:
+            filepath = encode_dir / filepath.name
+        return filepath.with_suffix(f'.{self.file_extension}')
+
+    def silence_params(
+        self, manifest: Manifest, encode_dir: Optional[Path] = None
+    ) -> Optional[AudioParams]:
+        """The sample format to write silent fragments in: that of the speech
+        they will sit between.
+
+        Only the server knows what it returns audio as, so the answer is read
+        off a fragment it has already produced. Matching it is what lets the
+        whole book be concatenated by copying samples through untouched, rather
+        than decoding and resampling every fragment.
+
+        Args:
+            manifest: The `Manifest` being encoded.
+            encode_dir: The directory `Path` the audio files are saved to.
+
+        Returns:
+            The `AudioParams` of the first encoded speech fragment, or `None` if
+            there is no speech to copy them from.
+        """
+        for fragment in manifest.fragments:
+            if fragment.text and fragment.filename:
+                filepath = self.fragment_path(fragment.filename, encode_dir)
+                if filepath.is_file():
+                    return audio_params(filepath)
+        return None
 
     def break_tag(self, duration: int) -> Callable[[re.Match], str]:
         """Create a function to replace multiple newlines with plain-text

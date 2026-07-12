@@ -41,8 +41,8 @@ def speech_call(text, voice_id='Ryan', url=DEFAULT_URL, language='English',
 
 class TestMain():
     def test_main(
-        self, mock_audio, mock_builtins_open, mock_qwen, text_to_encode,
-        tmp_path, voices_json_data
+        self, mock_concat, mock_silence, mock_builtins_open, mock_qwen,
+        text_to_encode, tmp_path, voices_json_data
     ):
         # Setup
         sys_args = [
@@ -77,15 +77,11 @@ class TestMain():
             tmp_path / 'test-00000.wav', b'audio'
         )
         # No silence
-        mock_audio.segment_cls.silent.assert_not_called()
+        mock_silence.assert_not_called()
         # Concat file
-        mock_audio.segment_cls.empty.assert_called_once()
-        mock_audio.segment_cls.from_file.assert_called_once_with(
-            str(tmp_path / 'test-00000.wav'), format='wav'
-        )
-        mock_audio.segment.export.assert_called_once_with(
-            'test.wav', format='wav'
-        )
+        assert mock_concat.call_count == 1
+        audio_dir, _, fmt, out = mock_concat.call_args.args
+        assert (audio_dir, fmt, out) == (tmp_path, 'wav', Path('test.wav'))
         # Manifest file
         mock_builtins_open.assert_any_call(
             str(tmp_path / 'test-manifest.json'), 'w', **WRITE_KW
@@ -94,7 +90,8 @@ class TestMain():
         assert mock_builtins_open.call_count == 3
 
     def test_main_manifest(
-        self, mock_audio, mock_builtins_open, mock_qwen, manifest_json_data
+        self, mock_concat, mock_silence, mock_builtins_open, mock_qwen,
+        manifest_json_data
     ):
         # Setup
         sys_args = [
@@ -129,15 +126,13 @@ class TestMain():
         mock_qwen.post.assert_has_calls([speech_call('Text 2')])
         mock_qwen.write_bytes.assert_any_call(Path('test-00002.wav'), b'audio')
         assert mock_qwen.write_bytes.call_count == 2
-        # Fragment #4 (silence)
-        mock_audio.segment_cls.silent.assert_called_once_with(duration=42)
-        mock_audio.segment.export.assert_any_call(
-            'test-00004.wav', format='wav'
-        )
+        # Fragment #4 (silence), written to match the speech around it
+        assert mock_silence.call_count == 1
+        duration, filepath, fmt = mock_silence.call_args.args[:3]
+        assert (duration, filepath, fmt) == (42, Path('test-00004.wav'), 'wav')
         # Concat files
-        mock_audio.segment_cls.empty.assert_called_once()
-        mock_audio.segment.export.assert_any_call('test.wav', format='wav')
-        assert mock_audio.segment.export.call_count == 2
+        assert mock_concat.call_count == 1
+        assert mock_concat.call_args.args[3] == Path('test.wav')
         # Manifest file
         mock_builtins_open.assert_any_call(
             'test-manifest.json', 'w', **WRITE_KW
@@ -280,7 +275,8 @@ class TestMain():
         assert error in out
 
     def test_main_concat_exception(
-        self, capfd, mock_audio, mock_builtins_open, mock_qwen, text_to_encode
+        self, capfd, mock_concat, mock_silence, mock_builtins_open, mock_qwen,
+        text_to_encode
     ):
         # Setup
         error = 'export error'
@@ -292,7 +288,7 @@ class TestMain():
             'test.txt'
         ]
         mock_write = mock_builtins_open.return_value.write
-        mock_audio.segment.export.side_effect = Exception(error)
+        mock_concat.side_effect = Exception(error)
 
         # Run
         with pytest.raises(SystemExit) as se:
@@ -311,12 +307,9 @@ class TestMain():
             Path('test-00000.wav'), b'audio'
         )
         # No silence
-        mock_audio.segment_cls.silent.assert_not_called()
-        # Concat files
-        mock_audio.segment_cls.empty.assert_called_once()
-        mock_audio.segment.export.assert_called_once_with(
-            'test.wav', format='wav'
-        )
+        mock_silence.assert_not_called()
+        # Concat files (which raised)
+        assert mock_concat.call_count == 1
         # Manifest file written before concat
         mock_builtins_open.assert_any_call(
             'test-manifest.json', 'w', **WRITE_KW
