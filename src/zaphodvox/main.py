@@ -3,7 +3,7 @@ import json
 import sys
 from argparse import Namespace
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from rich.console import Console
 from rich.table import Table
@@ -18,7 +18,6 @@ from zaphodvox.arg_parser import parse_args
 from zaphodvox.llm import LLMClient, proofread
 from zaphodvox.paths import abspath, clip_filename, rebase_ref
 from zaphodvox.proof import ProofReport, proof_text
-from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import clean_text, parse_text
 from zaphodvox.voice import Voice
 
@@ -208,13 +207,30 @@ def encoder_voice(
     encoder: Optional[Encoder] = None
     voice: Optional[Voice] = None
     if encoder_name:
-        for encoder_class in Encoder.__subclasses__():
-            if encoder_name == encoder_class.name:
-                encoder, voice = encoder_class.from_args(args)
-                break
-        if not encoder:
-            raise ValueError(f'Encoder "{encoder_name}" not found.')
+        encoder, voice = encoder_class(encoder_name).from_args(args)
     return encoder, voice
+
+
+def encoder_class(name: str) -> type[Encoder]:
+    """Finds the `Encoder` subclass with the given name.
+
+    An encoder module has to be imported to be found here (`arg_parser` imports
+    every one of them, which is also what populates the `--encoder-name`
+    choices).
+
+    Args:
+        name: The `Encoder.name` to look for.
+
+    Returns:
+        The `Encoder` subclass.
+
+    Raises:
+        ValueError: If no encoder has that name.
+    """
+    for cls in Encoder.__subclasses__():
+        if cls.name == name:
+            return cls
+    raise ValueError(f'Encoder "{name}" not found.')
 
 
 def clean(args: Namespace, text: str) -> str:
@@ -361,15 +377,9 @@ def audition(args: Namespace, text: str, console: Console) -> None:
         ValueError: If no audition text can be determined.
     """
     basename: str = args.basename
-    description: Optional[str] = args.voice_description
     encoder: Encoder = args.encoder
-    instruct: Optional[str] = args.voice_instruct
-    language: str = args.voice_language
     out_dir: Optional[Path] = args.out_dir
-    ref_audio: Optional[Path] = args.voice_ref_audio
-    ref_text: Optional[str] = args.voice_ref_text
-    temperature: Optional[float] = args.voice_temperature
-    voice_id: Optional[str] = args.voice_id
+    voice: Voice = args.voice
 
     seeds = parse_seeds(args.audition)
     audition_text = args.audition_text or next(
@@ -384,31 +394,16 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             'reference.[/yellow]'
         )
 
-    def candidate_voice(seed: int) -> QwenVoice:
-        if ref_audio:
-            # Re-cloning an existing clone. The candidates are synthetic takes
-            # of the source voice, so adopting one re-anchors the voice to clean
-            # studio audio instead of the original recording.
-            return QwenVoice(
-                ref_audio=ref_audio.as_posix(), ref_text=ref_text,
-                language=language, seed=seed, temperature=temperature
-            )
-        if description:
-            return QwenVoice(
-                description=description, language=language,
-                seed=seed, temperature=temperature
-            )
-        return QwenVoice(
-            voice_id=voice_id, language=language,
-            instruct=instruct, seed=seed, temperature=temperature
-        )
-
+    # Every candidate is the voice the command line asked for, with only the
+    # seed varied -- so this works for whatever the encoder's voice is, and a
+    # clone source re-clones itself (the candidates are synthetic takes of it,
+    # so adopting one re-anchors the voice to clean studio audio).
     file_ext = encoder.file_extension
     fragments = [
         Fragment(
             text=audition_text,
             filename=f'{basename}-audition-{seed:02}.{file_ext}',
-            voice=candidate_voice(seed)
+            voice=voice.model_copy(update={'seed': seed})
         )
         for seed in seeds
     ]
@@ -418,13 +413,10 @@ def audition(args: Namespace, text: str, console: Console) -> None:
         {
             'seed': seed,
             'filename': fragment.filename,
-            'voice_id': voice_id,
-            'ref_audio': ref_audio.as_posix() if ref_audio else None,
-            'description': description,
-            'instruct': instruct,
-            'language': language,
-            'temperature': temperature,
             'text': audition_text,
+            # The voice that produced the candidate, tagged with its encoder --
+            # which is how `--adopt` knows what kind of voice to build.
+            'voice': voice.model_dump(exclude_none=True),
         }
         for seed, fragment in zip(seeds, fragments)
     ]
@@ -432,19 +424,9 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     with open(str(index_fp), 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(index, indent=4))
 
-    if ref_audio:
-        header = f'Auditioning clone of "{ref_audio}"'
-        if not ref_text:
-            header += '  ·  [dim]zero-shot (no --voice-ref-text)[/dim]'
-    elif description:
-        header = f'Auditioning designed voice: "{description}"'
-    else:
-        header = f'Auditioning "{voice_id}"'
-        if instruct:
-            header += f'  ·  instruct: "{instruct}"'
-    if temperature is not None:
-        header += f'  ·  temp: {temperature}'
-    header += f'  ·  {language}'
+    header = f'Auditioning {voice.label}'
+    if voice.temperature is not None:
+        header += f'  ·  temp: {voice.temperature}'
     console.print(header)
     table = Table()
     table.add_column('seed', justify='right')
@@ -463,7 +445,7 @@ def audition(args: Namespace, text: str, console: Console) -> None:
 def adopt(args: Namespace, text: str, console: Console) -> None:
     """Adopts an audition candidate as a clone voice in a voices file.
 
-    Reads the audition index (the inputfile), builds a `QwenVoice` that clones
+    Reads the audition index (the inputfile), builds a `Voice` that clones
     the candidate for the requested seed, and adds/updates it under
     `--voice-name` in `--voices-file` (created if it does not exist).
 
@@ -491,15 +473,17 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
     clips_dir: Path = voices_file.parent / (args.clips_dir or Path('.'))
     clip = clips_dir / clip_filename(voice_name, candidate.suffix)
     copied = copy_clip(candidate, clip)
-    voice = QwenVoice(
-        ref_audio=clip.as_posix(),
-        ref_text=entry.get('text'),
-        language=entry.get('language', 'English'),
-        seed=args.voice_seed if args.voice_seed is not None else seed,
-        temperature=(
-            args.voice_temperature if args.voice_temperature is not None
-            else entry.get('temperature')
-        ),
+    # An index written before there was a second backend has no source voice
+    # recorded, and describes a Qwen voice with its settings spread flat -- which
+    # is what it was, since Qwen was the only encoder at the time.
+    source = entry.get('voice') or {
+        'encoder': 'qwen',
+        'language': entry.get('language', 'English'),
+        'temperature': entry.get('temperature'),
+    }
+    entry['voice'] = source
+    voice = encoder_class(source.get('encoder', 'qwen')).clone_voice(
+        clip.as_posix(), entry, args
     )
 
     named = NamedVoices()
@@ -632,7 +616,7 @@ def copy_clip(source: Path, dest: Path) -> bool:
     return True
 
 
-def anchor_voices(voices: Optional[dict[str, QwenVoice]], base_dir: Path) -> None:
+def anchor_voices(voices: Optional[dict[str, Voice]], base_dir: Path) -> None:
     """Anchors each voice's relative `ref_audio` to the directory of the file it
     was read from.
 
@@ -644,7 +628,9 @@ def anchor_voices(voices: Optional[dict[str, QwenVoice]], base_dir: Path) -> Non
         voice.anchor(base_dir)
 
 
-def rebase_voices(voices: list[Optional[Voice]], target_dir: Path) -> None:
+def rebase_voices(
+    voices: Sequence[Optional[Voice]], target_dir: Path
+) -> None:
     """Rewrites each voice's `ref_audio` in place so that it stays valid from
     the file it is about to be written into.
 
@@ -659,7 +645,7 @@ def rebase_voices(voices: list[Optional[Voice]], target_dir: Path) -> None:
         target_dir: The directory `Path` of the file being written.
     """
     for voice in voices:
-        if isinstance(voice, QwenVoice) and voice.ref_audio:
+        if voice is not None and voice.ref_audio:
             voice.ref_audio = rebase_ref(
                 voice.ref_audio, voice.base_dir, target_dir
             )
@@ -691,7 +677,7 @@ def read_text_manifest(
             base_dir = inputfile.parent
             anchor_voices(manifest.voices, base_dir)
             for fragment in manifest.fragments:
-                if isinstance(fragment.voice, QwenVoice):
+                if fragment.voice is not None:
                     fragment.voice.anchor(base_dir)
     return text, manifest
 

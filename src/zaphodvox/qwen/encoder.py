@@ -218,3 +218,37 @@ class QwenEncoder(Encoder):
         encoder = cls(url=args.qwen_url, audio_format=args.qwen_audio_format)
         voice = QwenVoice.from_args(args)
         return (encoder, voice)
+
+    @classmethod
+    def clone_voice(
+        cls, ref_audio: str, entry: dict, args: Namespace
+    ) -> Voice:
+        """Builds the clone `QwenVoice` that `--adopt` writes into the voices
+        file.
+
+        The candidate's own text becomes the clone's `ref_text`, so the adopted
+        voice uses the higher-quality in-context (ICL) mode: we know exactly what
+        was said in the clip, because we asked for it.
+
+        Args:
+            ref_audio: The path of the adopted reference clip.
+            entry: The audition index entry for the adopted candidate.
+            args: The command-line arguments.
+
+        Returns:
+            The clone `QwenVoice`.
+        """
+        source = entry.get('voice') or {}
+        temperature = args.voice_temperature
+        if temperature is None:
+            temperature = source.get('temperature')
+        seed = args.voice_seed
+        if seed is None:
+            seed = entry.get('seed')
+        return QwenVoice(
+            ref_audio=ref_audio,
+            ref_text=entry.get('text'),
+            language=source.get('language', 'English'),
+            seed=seed,
+            temperature=temperature,
+        )
