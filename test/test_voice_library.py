@@ -390,3 +390,107 @@ class TestAdoptPaths():
 
         # Verify
         assert (audition / 'narrator.wav').read_bytes() == b'RIFFfake'
+
+
+class TestAddVoice():
+    """`--add-voice` registers a clip you already have, with no audition."""
+
+    @pytest.fixture
+    def library(self, tmp_path, monkeypatch) -> Path:
+        library = tmp_path / 'library'
+        (library / 'clips').mkdir(parents=True)
+        (library / 'clips' / 'narrator.wav').write_bytes(b'RIFFhuman')
+        monkeypatch.chdir(library)
+        return library
+
+    def test_a_clip_already_in_the_library_is_referenced_in_place(
+        self, library, capfd
+    ):
+        # Run
+        main([
+            '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+            '-f', 'voices.json', '--clips-dir', 'clips',
+            '--voice-ref-audio', 'clips/narrator.wav',
+            '--voice-exaggeration', '0.6', '--voice-seed', '42',
+        ])
+
+        # Verify: referenced where it lies -- copying it to `clips/Narrator.wav`
+        # would duplicate audio that is already in the library.
+        voices = json.loads(
+            (library / 'voices.json').read_text(encoding='utf-8')
+        )
+        assert voices['voices']['Narrator'] == {
+            'encoder': 'chatterbox',
+            'ref_audio': 'clips/narrator.wav',
+            'exaggeration': 0.6,
+            'seed': 42,
+        }
+        # Compare the directory's actual entries: `Path.exists()` answers for
+        # `narrator.wav` on a case-insensitive filesystem (macOS, Windows), and
+        # would report a copy that never happened.
+        assert [p.name for p in (library / 'clips').iterdir()] == [
+            'narrator.wav'
+        ]
+
+    def test_a_clip_from_outside_is_copied_in(
+        self, library, tmp_path, capfd
+    ):
+        # Setup: a recording sitting somewhere else entirely.
+        outside = tmp_path / 'downloads'
+        outside.mkdir()
+        (outside / 'recording.wav').write_bytes(b'RIFFhuman')
+
+        # Run
+        main([
+            '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+            '-f', 'voices.json', '--clips-dir', 'clips',
+            '--voice-ref-audio', str(outside / 'recording.wav'),
+        ])
+
+        # Verify: brought into the library, so it holds every clip it refers to.
+        assert (library / 'clips' / 'Narrator.wav').read_bytes() == b'RIFFhuman'
+        voices = json.loads(
+            (library / 'voices.json').read_text(encoding='utf-8')
+        )
+        assert voices['voices']['Narrator']['ref_audio'] == 'clips/Narrator.wav'
+
+    def test_voices_for_both_encoders_in_one_file(self, library, capfd):
+        # Run: the A/B setup -- the same library, two engines.
+        main([
+            '--encoder-name', 'chatterbox', '--add-voice', 'NarratorCB',
+            '-f', 'voices.json', '--voice-ref-audio', 'clips/narrator.wav',
+        ])
+        main([
+            '--encoder-name', 'qwen', '--add-voice', 'Narrator',
+            '-f', 'voices.json', '--voice-ref-audio', 'clips/narrator.wav',
+            '--voice-ref-text', 'Well, hello there.',
+        ])
+
+        # Verify
+        voices = json.loads(
+            (library / 'voices.json').read_text(encoding='utf-8')
+        )['voices']
+        assert voices['NarratorCB']['encoder'] == 'chatterbox'
+        assert voices['Narrator']['encoder'] == 'qwen'
+        assert voices['Narrator']['ref_text'] == 'Well, hello there.'
+
+    def test_a_missing_clip_is_reported(self, library, capfd):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+                '-f', 'voices.json',
+                '--voice-ref-audio', 'clips/nope.wav',
+            ])
+
+        assert se.value.code == 1
+        assert 'not found' in capfd.readouterr()[0]
+
+    def test_requires_a_voice(self, library, capfd):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+                '-f', 'voices.json',
+            ])
+
+        assert se.value.code == 1
+        assert 'requires a voice' in capfd.readouterr()[0]

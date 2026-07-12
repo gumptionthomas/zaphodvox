@@ -65,6 +65,10 @@ def main(
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
 
+        if args.add_voice:
+            add_voice(args, console)
+            return
+
         if args.adopt is not None:
             adopt(args, text, console)
             return
@@ -119,6 +123,7 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
     concat: bool = args.concat
     audition: bool = bool(args.audition)
     adopt: bool = args.adopt is not None
+    add_voice: bool = bool(args.add_voice)
     proof: bool = args.proof
     add_word: bool = bool(args.add_word)
 
@@ -126,7 +131,8 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
         console.print(f'{Path(sys.argv[0]).stem}, version {__version__}')
         sys.exit(0)
     if not any(
-        [clean, plan, encode, concat, audition, adopt, proof, add_word]
+        [clean, plan, encode, concat, audition, adopt, add_voice, proof,
+         add_word]
     ):
         console.print(
             "[italic dim]Nothing to do... I'd give you advice, "
@@ -153,6 +159,17 @@ def validate(args: Namespace) -> None:
     if add_word:
         if not args.dict:
             raise ValueError('--add-word requires --dict.')
+        return
+    if args.add_voice:
+        if any([args.clean, args.plan, encode, args.concat, audition,
+                args.adopt is not None]):
+            raise ValueError(
+                '--add-voice cannot be combined with other actions.'
+            )
+        if not encoder_name:
+            raise ValueError('--add-voice requires --encoder-name.')
+        if not args.voices_file:
+            raise ValueError('--add-voice requires --voices-file.')
         return
     if not (inputfile or audition):
         raise ValueError('No input file specified.')
@@ -491,6 +508,72 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
         clip.as_posix(), entry, args
     )
 
+    if copied:
+        console.print(f'Copied {candidate} -> {clip}')
+    write_named_voice(voices_file, voice_name, voice, console)
+    if copied:
+        console.print(
+            '[dim]The clip now lives in the voices library; the audition '
+            'files can be deleted.[/dim]'
+        )
+
+
+def add_voice(args: Namespace, console: Console) -> None:
+    """Adds the voice described by the command line to a voices file, under
+        `--add-voice`'s name.
+
+    The way to register a reference clip you already have -- a recording of a
+    real person, say -- without auditioning anything.
+
+    A clip that is already inside the library is referenced where it lies. One
+    from anywhere else is copied in (like `--adopt` does), so that the library
+    holds every clip it refers to and can be moved as a unit.
+
+    Args:
+        args: The parsed command-line arguments.
+        console: The `Console` object.
+
+    Raises:
+        ValueError: If no voice was described.
+    """
+    voice_name: str = args.add_voice
+    voices_file: Path = args.voices_file
+    encoder: Encoder = args.encoder
+    voice: Optional[Voice] = args.voice
+
+    if voice is None:
+        raise ValueError(
+            '--add-voice requires a voice: a preset "--voice-id", a clone '
+            '"--voice-ref-audio", or (for qwen) a "--voice-description".'
+        )
+    encoder.validate_voice(voice)
+
+    source = voice.resolved_ref_audio
+    if source is not None:
+        library = abspath(voices_file.parent)
+        if not abspath(source).is_relative_to(library):
+            clips_dir = voices_file.parent / (args.clips_dir or Path('.'))
+            clip = clips_dir / clip_filename(voice_name, source.suffix)
+            if copy_clip(source, clip):
+                console.print(f'Copied {source} -> {clip}')
+            voice.ref_audio = clip.as_posix()
+            voice.anchor(None)
+
+    write_named_voice(voices_file, voice_name, voice, console)
+
+
+def write_named_voice(
+    voices_file: Path, voice_name: str, voice: Voice, console: Console
+) -> None:
+    """Adds or updates a named voice in a voices file, creating the file if it
+        does not exist.
+
+    Args:
+        voices_file: The `Path` of the voices file.
+        voice_name: The name to store the voice under.
+        voice: The `Voice` to store.
+        console: The `Console` object.
+    """
     named = NamedVoices()
     try:
         with open(str(voices_file), 'r', encoding='utf-8') as f:
@@ -504,21 +587,15 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
     named.voices = voices
     # The new voice's path is relative to where the command was run; the ones
     # already in the file are relative to the file. Rewrite both to the file, so
-    # a clip beside it stays a bare filename and the library stays movable.
+    # a clip inside the library stays a relative path and the library stays
+    # movable.
     rebase_voices([*voices.values()], voices_file.parent)
     with open(str(voices_file), 'w', encoding='utf-8', newline='\n') as f:
         f.write(named.model_dump_json(indent=4, exclude_none=True))
 
-    if copied:
-        console.print(f'Copied {candidate} -> {clip}')
     verb = 'Updated' if existed else 'Added'
     console.print(f'{verb} voice "{voice_name}" in {voices_file}:')
     console.print(voice.model_dump_json(indent=4, exclude_none=True))
-    if copied:
-        console.print(
-            '[dim]The clip now lives beside the voices file; the audition '
-            'files can be deleted.[/dim]'
-        )
 
 
 def proof(args: Namespace, text: str, console: Console) -> None:

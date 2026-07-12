@@ -469,6 +469,20 @@ $ rm -rf refs
 
 `library.json` now records `"ref_audio": "Narrator.wav"`, sitting right next to it. Note that audition clips are written to `--out-dir` (or the current directory) and never alongside the voices file, so this also keeps you from adopting a clip that lives inside one project's directory — which would break the shared library for every other project the day you moved it.
 
+### Registering a clip you already have
+
+If you already have a reference clip — a recording of a real person, say — `--add-voice` puts it in the voices file directly, with no audition:
+
+```console
+$ zaphodvox --encoder=chatterbox --add-voice=Narrator \
+    --voice-ref-audio=clips/narrator.wav --voice-exaggeration=0.6 --voice-seed=42
+    Added voice "Narrator" in voices.json
+```
+
+The voice is built from the ordinary `--voice-*` options, so this works for presets, clones and designs on either encoder — which is also how one voices file comes to hold voices for both engines. A clip **already inside the library is referenced where it lies** (nothing is duplicated); one from anywhere else is **copied in** under the voice's name, like `--adopt` does, so the library keeps holding every clip it refers to.
+
+Note that cloning straight from a raw human recording carries the recording with it — room tone, mouth noise, an uneven level. To launder it, [audition the clone and adopt a clean take](#cleaning-up-a-recorded-human-voice) instead.
+
 To keep the clips in their own subdirectory, point `--adopt` at one with `--clips-dir` (created if it doesn't exist). A relative path is taken from the voices file's own directory, since it describes the library's layout rather than where you happen to be standing:
 
 ```console
