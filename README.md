@@ -156,7 +156,7 @@ Listen to the candidates and adopt the one you like with `--adopt`, giving it a 
 zaphodvox --adopt=2 --voice-name=Narrator --voices-file=voices.json refs/ryan-audition.json
 ```
 
-This adds (or updates) a `Narrator` clone voice in `voices.json` that references the chosen candidate clip, carrying over its `ref_text`, `seed`, and `temperature` from the audition. From then on, `ZVOX: Narrator` (or `--voice-name=Narrator`) reads with that voice. `--voice-seed`/`--voice-temperature` override the carried-over values if given. Auditioning and adopting are each their own mode and can't be combined with `--encode`/`--plan`/`--concat`.
+This adds (or updates) a `Narrator` clone voice in `voices.json`, carrying over the candidate's `ref_text`, `seed`, and `temperature` from the audition. The chosen clip is **copied in beside the voices file, named for the voice** (`Narrator.wav`) — so the voices file and every clip it refers to stay together, and the audition output is left as the throwaway it is. Nothing is deleted: the candidates you passed on stay where they are, and you can go back and adopt a different seed later. From then on, `ZVOX: Narrator` (or `--voice-name=Narrator`) reads with that voice. `--voice-seed`/`--voice-temperature` override the carried-over values if given. Auditioning and adopting are each their own mode and can't be combined with `--encode`/`--plan`/`--concat`.
 
 #### Cleaning up a recorded human voice
 
@@ -397,16 +397,18 @@ $ zaphodvox --voices-file=~/voices/library.json --encoder=qwen --encode --voice-
 
 `narrator.wav` is found next to `library.json`, wherever you run from. Point `ZAPHODVOX_VOICES_FILE` at the library once and you can drop the `--voices-file` argument entirely.
 
-When you audition a voice destined for the library, send the candidates there with `--out-dir`. Audition clips are written to `--out-dir` (or the current directory), *not* alongside the voices file — so auditioning inside a project and adopting from there would leave the shared library pointing at a clip inside that one project, which breaks for everyone else the day you move it:
+Audition into a scratch directory, and `--adopt` will bring the winner into the library for you — it copies the chosen clip in beside the voices file, named for the voice. The library only ever receives the one clip you picked, so the scratch directory can be deleted wholesale:
 
 ```console
-$ cd ~/books/hitchhiker
+$ cd ~/voices
 $ zaphodvox --encoder=qwen --voice-id=Ryan --basename=narrator \
-    --audition=1-8 --audition-text="..." --out-dir ~/voices
-$ zaphodvox --adopt=5 --voice-name=Narrator ~/voices/narrator-audition.json
+    --audition=1-8 --audition-text="..." --out-dir refs
+$ zaphodvox --adopt=5 --voice-name=Narrator refs/narrator-audition.json
+    Copied refs/narrator-audition-05.wav -> Narrator.wav
+$ rm -rf refs
 ```
 
-The adopted clip now sits beside `library.json` and is recorded as a bare `narrator-audition-05.wav`. Delete the candidates you didn't adopt.
+`library.json` now records `"ref_audio": "Narrator.wav"`, sitting right next to it. Note that audition clips are written to `--out-dir` (or the current directory) and never alongside the voices file, so this also keeps you from adopting a clip that lives inside one project's directory — which would break the shared library for every other project the day you moved it.
 
 Because the library sits outside the project, the voice written into the project's manifest is rewritten to remain valid from *there* (as `~/voices/narrator.wav`), so the manifest can still re-encode itself later on its own. Within a directory the paths stay relative — `--adopt` writes a clip that sits beside the voices file as a bare `narrator.wav` — so the library as a whole stays self-contained and can be moved or committed as a unit.
 

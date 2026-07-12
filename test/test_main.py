@@ -748,10 +748,15 @@ class TestAudition():
 
 
 class TestAdopt():
-    def test_adopt_creates_voices_file(self, mock_builtins_open):
+    def test_adopt_creates_voices_file(self, mock_builtins_open, monkeypatch):
         # Setup: adopt candidate seed 1; the voices file does not exist yet.
+        # The chosen clip is copied in beside the voices file, so the opens are:
+        # index read, clip read, clip write, voices read, voices write.
+        monkeypatch.setattr(Path, 'is_file', lambda self: True)
         mock_builtins_open.side_effect = (
             mock_open(read_data=AUDITION_INDEX).return_value,  # index read
+            mock_open(read_data=b'audio').return_value,        # clip read
+            mock_builtins_open.return_value,                   # clip write
             FileNotFoundError(),                               # voices missing
             mock_builtins_open.return_value,                   # voices write
         )
@@ -766,14 +771,17 @@ class TestAdopt():
         # Run
         main(sys_args)
 
-        # Verify: a clone entry is written, resolving the clip beside the index.
+        # Verify: the clip is copied in under the voice's own name, and the
+        # entry references it rather than the audition candidate in refs/.
+        mock_builtins_open.assert_any_call('refs/ryan-audition-01.wav', 'rb')
+        mock_builtins_open.assert_any_call('Narrator.wav', 'wb')
         mock_builtins_open.assert_any_call('voices.json', 'w', **WRITE_KW)
         written = json.loads(mock_write.call_args[0][0])
         assert written == {
             'voices': {
                 'Narrator': {
                     'language': 'English',
-                    'ref_audio': 'refs/ryan-audition-01.wav',
+                    'ref_audio': 'Narrator.wav',
                     'ref_text': 'Sample reference line for the narrator voice.',
                     'seed': 1,
                     'temperature': 0.6,
@@ -781,13 +789,16 @@ class TestAdopt():
             }
         }
 
-    def test_adopt_merges_into_existing(self, mock_builtins_open):
+    def test_adopt_merges_into_existing(self, mock_builtins_open, monkeypatch):
         # Setup: an existing voices file with another voice.
+        monkeypatch.setattr(Path, 'is_file', lambda self: True)
         existing = json.dumps(
             {'voices': {'Ford': {'voice_id': 'Dylan', 'language': 'English'}}}
         )
         mock_builtins_open.side_effect = (
             mock_open(read_data=AUDITION_INDEX).return_value,
+            mock_open(read_data=b'audio').return_value,
+            mock_builtins_open.return_value,
             mock_open(read_data=existing).return_value,
             mock_builtins_open.return_value,
         )
@@ -802,9 +813,24 @@ class TestAdopt():
         # Verify: both the old and new voices are present.
         written = json.loads(mock_write.call_args[0][0])
         assert set(written['voices']) == {'Ford', 'Narrator'}
-        assert written['voices']['Narrator']['ref_audio'] == (
-            'ryan-audition-00.wav'
+        assert written['voices']['Narrator']['ref_audio'] == 'Narrator.wav'
+
+    def test_adopt_missing_candidate(self, capfd, mock_builtins_open):
+        # Setup: the index names a clip that is not on disk.
+        mock_builtins_open.side_effect = (
+            mock_open(read_data=AUDITION_INDEX).return_value,
         )
+
+        # Run
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--adopt=0', '--voice-name=Narrator',
+                '--voices-file=voices.json', 'ryan-audition.json'
+            ])
+
+        # Verify
+        assert se.value.code == 1
+        assert 'not found' in capfd.readouterr()[0]
 
     def test_adopt_seed_not_found(self, capfd, mock_builtins_open):
         mock_builtins_open.return_value = mock_open(

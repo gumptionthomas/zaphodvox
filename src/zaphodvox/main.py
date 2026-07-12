@@ -16,7 +16,7 @@ from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.named_voices import NamedVoices
 from zaphodvox.arg_parser import parse_args
 from zaphodvox.llm import LLMClient, proofread
-from zaphodvox.paths import rebase_ref
+from zaphodvox.paths import abspath, clip_filename, rebase_ref
 from zaphodvox.proof import ProofReport, proof_text
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import clean_text, parse_text
@@ -485,9 +485,11 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
         raise ValueError(f'No audition candidate for seed {seed}.')
 
     inputfile: Path = args.inputfile
-    ref_audio = (inputfile.parent / entry['filename']).as_posix()
+    candidate = inputfile.parent / entry['filename']
+    clip = voices_file.parent / clip_filename(voice_name, candidate.suffix)
+    copied = copy_clip(candidate, clip)
     voice = QwenVoice(
-        ref_audio=ref_audio,
+        ref_audio=clip.as_posix(),
         ref_text=entry.get('text'),
         language=entry.get('language', 'English'),
         seed=args.voice_seed if args.voice_seed is not None else seed,
@@ -515,9 +517,16 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
     with open(str(voices_file), 'w', encoding='utf-8', newline='\n') as f:
         f.write(named.model_dump_json(indent=4, exclude_none=True))
 
+    if copied:
+        console.print(f'Copied {candidate} -> {clip}')
     verb = 'Updated' if existed else 'Added'
     console.print(f'{verb} voice "{voice_name}" in {voices_file}:')
     console.print(voice.model_dump_json(indent=4, exclude_none=True))
+    if copied:
+        console.print(
+            '[dim]The clip now lives beside the voices file; the audition '
+            'files can be deleted.[/dim]'
+        )
 
 
 def proof(args: Namespace, text: str, console: Console) -> None:
@@ -586,6 +595,37 @@ def add_word(args: Namespace, console: Console) -> None:
         )
     else:
         console.print(f'No new words added to {dict_path}.')
+
+
+def copy_clip(source: Path, dest: Path) -> bool:
+    """Copies an adopted reference clip in beside the voices file.
+
+    The audition candidates are throwaways: the rest of them get deleted, and
+    the one that is kept should not be left sitting in a scratch directory that
+    a voices library then depends on. Copying it in means the library holds
+    every clip it refers to, and the audition output can be discarded wholesale.
+
+    Nothing is deleted here -- the other candidates are left where they are.
+
+    Args:
+        source: The `Path` of the audition candidate.
+        dest: The `Path` to copy it to.
+
+    Returns:
+        `True` if the clip was copied, `False` if it was already in place.
+
+    Raises:
+        ValueError: If the candidate does not exist.
+    """
+    if not source.is_file():
+        raise ValueError(f'Audition candidate "{source}" not found.')
+    if abspath(source) == abspath(dest):
+        return False
+    with open(str(source), 'rb') as f_in:
+        data = f_in.read()
+    with open(str(dest), 'wb') as f_out:
+        f_out.write(data)
+    return True
 
 
 def anchor_voices(voices: Optional[dict[str, QwenVoice]], base_dir: Path) -> None:
