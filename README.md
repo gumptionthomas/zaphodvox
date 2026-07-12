@@ -33,11 +33,27 @@ $ pip install -e .
 
 `zaphodvox` needs **Python 3.10–3.12** (its pinned dependencies don't yet ship wheels for 3.13+, so a newer interpreter will try — and fail — to build them from source; [pyenv](https://github.com/pyenv/pyenv) makes pinning one easy) and a current installation of [ffmpeg](https://ffmpeg.org/). To actually synthesize anything, it also needs a running [Qwen3-TTS server](#qwen3-tts-server).
 
-## Qwen3-TTS Server
+## Servers
 
 > "He didn't know why he had become President of the Galaxy, except that it seemed a fun thing to be."
 
-`zaphodvox` does no synthesis itself. It talks to a locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server that exposes an OpenAI-style speech API, so you must have one running before encoding.
+`zaphodvox` does no synthesis itself. It talks to a locally-hosted TTS server, so you must have one running before encoding. Two engines are supported, selected with `--encoder`:
+
+| | `--encoder=qwen` | `--encoder=chatterbox` |
+|---|---|---|
+| Server | [`eddie-tts`](https://github.com/gumptionthomas/eddie-tts) (Qwen3-TTS) | [`Chatterbox-TTS-Server`](https://github.com/devnen/Chatterbox-TTS-Server) |
+| Default URL | `http://127.0.0.1:4123` | `http://127.0.0.1:8004` |
+| Preset speakers | yes (`--voice-id=Ryan`) | yes (`--voice-id=Ryan.wav`) |
+| Voice cloning | yes, with optional in-context (ICL) mode | yes (zero-shot only) |
+| Voice design (from a description) | yes | **no** |
+| Steering the delivery | `--voice-instruct` (natural language) | `--voice-exaggeration`, `--voice-cfg-weight` (numeric) |
+| `--voice-seed` / `--voice-temperature` | yes | yes |
+
+Both are local, need no API key, and want an NVIDIA GPU. They each hold a model in VRAM, so **run one at a time** unless you have room for both.
+
+### Qwen3-TTS Server
+
+`--encoder=qwen` talks to a Qwen3-TTS server that exposes an OpenAI-style speech API.
 
 The server needs to expose three endpoints:
 
@@ -48,6 +64,22 @@ The server needs to expose three endpoints:
 The reference implementation is [**`eddie-tts`**](https://github.com/gumptionthomas/eddie-tts) — a Windows-friendly fork of [`cornball-ai/qwen3-tts-api`](https://github.com/cornball-ai/qwen3-tts-api), which in turn serves the open-weight [QwenLM/Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) models. Follow Eddie's README to install and run it. **The `--voice-seed` and `--voice-temperature` options require Eddie** — upstream `qwen3-tts-api` implements neither `seed` nor `temperature`, so on that server those flags are silently ignored. The models want an NVIDIA GPU, so a CUDA-capable card is effectively a prerequisite for the server (not for `zaphodvox`). No API keys or authentication are involved, as the server is expected to be local and trusted.
 
 By default `zaphodvox` talks to the server at `http://127.0.0.1:4123`. Override the base URL with the `--qwen-url` argument or the `ZAPHODVOX_QWEN_URL` environment variable.
+
+### Chatterbox Server
+
+`--encoder=chatterbox` talks to a [Chatterbox TTS server](https://github.com/devnen/Chatterbox-TTS-Server) (MIT), serving Resemble AI's Chatterbox model — a strong zero-shot cloner. The stock server is enough; no fork is needed. `zaphodvox` uses its native `POST /tts` (not the OpenAI-compatible endpoint, which insists on a meaningless `model` field and re-chunks text that has already been fragmented), and `POST /upload_reference` to send a clone's reference clip — once per clip, not once per fragment.
+
+```bash
+zaphodvox --encoder=chatterbox --voice-id=Ryan.wav --encode gone-bananas.txt
+```
+
+Chatterbox differs from Qwen in ways worth knowing, and `zaphodvox` **fails with a clear error rather than quietly ignoring a setting it cannot honor**:
+
+- **No voice design.** `--voice-description` is a Qwen feature. (You can still design a voice with Qwen, audition it, adopt the best take as a clone — and then hand that clip to Chatterbox.)
+- **No in-context cloning**, so no `--voice-ref-text`.
+- **`--voice-instruct` does not apply.** Delivery is steered numerically instead: `--voice-exaggeration` (how expressive, 0.25–2.0 — unlike `--voice-temperature`, this really is an expressiveness dial), `--voice-cfg-weight` (how closely it follows the reference, at the cost of expressiveness), and `--voice-speed` (pace).
+
+Override the base URL with `--chatterbox-url` or the `ZAPHODVOX_CHATTERBOX_URL` environment variable. Note that Chatterbox embeds Resemble's imperceptible [PerTh](https://github.com/resemble-ai/perth) watermark in everything it generates — a presence flag, carrying no identifying data.
 
 ## Usage
 
@@ -378,6 +410,31 @@ A design example:
     "temperature": 0.6
 }
 ```
+
+### Chatterbox Voice Configuration
+
+A voice records the encoder it belongs to, so **one voices file can hold voices for both engines** — handy for A/B-ing the same reference clip:
+
+```json
+{
+    "voices": {
+        "Narrator": {
+            "encoder": "qwen",
+            "ref_audio": "clips/narrator.wav",
+            "ref_text": "Well, hello there.",
+            "seed": 42
+        },
+        "NarratorCB": {
+            "encoder": "chatterbox",
+            "ref_audio": "clips/narrator.wav",
+            "exaggeration": 0.7,
+            "seed": 42
+        }
+    }
+}
+```
+
+A Chatterbox voice is a **preset** (`voice_id`, e.g. `Ryan.wav`) or a **clone** (`ref_audio`) — exactly one. Its fields are `seed`, `temperature`, `exaggeration`, `cfg_weight`, and `speed_factor`; it has no `description`, `ref_text`, `instruct`, or `language`, and including one is an error rather than a setting that is quietly dropped. A voice written before there was a second backend has no `encoder` and is read as Qwen, which is what it was.
 
 ### A shared voice library
 
