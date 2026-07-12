@@ -119,13 +119,20 @@ def concat_files(
         audio_dir / fragment.filename
         for fragment in manifest.fragments if fragment.filename
     ]
+    speech = [
+        audio_dir / fragment.filename
+        for fragment in manifest.fragments
+        if fragment.filename and fragment.text
+    ]
     if format == 'wav':
-        _concat_wav(filepaths, output_filepath)
+        _concat_wav(filepaths, speech, output_filepath)
     else:
         _concat_encoded(filepaths, output_filepath, format)
 
 
-def _concat_wav(filepaths: list[Path], output_filepath: Path) -> None:
+def _concat_wav(
+    filepaths: list[Path], speech: list[Path], output_filepath: Path
+) -> None:
     """Concatenates `wav` files by copying their samples straight through.
 
     Nothing is decoded, re-encoded or held in memory: the frames of each
@@ -135,10 +142,20 @@ def _concat_wav(filepaths: list[Path], output_filepath: Path) -> None:
 
     Args:
         filepaths: The `Path`s of the audio files to concatenate, in order.
+        speech: The `Path`s of the fragments that are speech rather than
+            silence, whose sample format the output takes.
         output_filepath: The `Path` of the concatenated output file.
     """
+    # Take the output format from the *speech*, never from a silent fragment: a
+    # book encoded before silence matched the speech has 11 kHz silence in it,
+    # and a book that opens with a blank line would otherwise be downsampled to
+    # 11 kHz in its entirety -- correct length, ruined quality, no error.
     target = next(
-        (p for p in (audio_params(f) for f in filepaths) if p), DEFAULT_PARAMS
+        (p for p in (audio_params(f) for f in speech) if p),
+        next(
+            (p for p in (audio_params(f) for f in filepaths) if p),
+            DEFAULT_PARAMS
+        )
     )
     with ProgressBar('Concatinating', total=len(filepaths)) as bar:
         with wave.open(str(output_filepath), 'wb') as out:

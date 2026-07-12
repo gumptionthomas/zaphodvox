@@ -150,6 +150,31 @@ class TestConcatWav():
         assert params == SPEECH
         assert seconds == pytest.approx(3.0, abs=0.01)
 
+    def test_a_leading_silence_does_not_set_the_output_format(
+        self, tmp_path, mock_progress_bar
+    ):
+        # Setup: a book encoded by an older version -- so its silence is 11 kHz
+        # -- that opens with a blank line, which `--clean` makes likely. Taking
+        # the format from the first *file* would downsample the entire book to
+        # 11 kHz: right length, ruined quality, no error.
+        write_wav(tmp_path / 'f-0.wav', LEGACY_SILENCE, 500)
+        write_wav(tmp_path / 'f-1.wav', SPEECH, 1000)
+        write_wav(tmp_path / 'f-2.wav', SPEECH, 1000)
+        manifest = Manifest(fragments=[
+            Fragment(filename='f-0.wav', text='', silence_duration=500),
+            Fragment(filename='f-1.wav', text='words'),
+            Fragment(filename='f-2.wav', text='more words'),
+        ])
+        out = tmp_path / 'book.wav'
+
+        # Run
+        concat_files(tmp_path, manifest, 'wav', out)
+
+        # Verify: the format comes from the speech, not from the silence.
+        params, seconds = read_wav(out)
+        assert params == SPEECH
+        assert seconds == pytest.approx(2.5, abs=0.01)
+
     def test_skips_an_unreadable_fragment(self, tmp_path, mock_progress_bar):
         # Setup
         write_wav(tmp_path / 'f-0.wav', SPEECH, 1000)
