@@ -19,9 +19,6 @@ class QwenVoice(Voice):
     """The encoder this voice belongs to. Defaults to `qwen`, so a voices file
     or manifest written before there was a second backend still reads back as
     what it was."""
-    voice_id: Optional[str] = None
-    """The built-in preset speaker name (e.g. `Ryan`). Mutually exclusive with
-    `ref_audio`/`description`."""
     language: str = 'English'
     """The language of the text (e.g. `English`). Defaults to `English`."""
     instruct: Optional[str] = None

@@ -7,7 +7,7 @@ import requests
 from tenacity import Retrying, stop_after_attempt
 
 from zaphodvox.chatterbox.voice import ChatterboxVoice
-from zaphodvox.encoder import Encoder
+from zaphodvox.encoder import Encoder, PresetVoice
 from zaphodvox.voice import Voice
 
 DEFAULT_URL = 'http://127.0.0.1:8004'
@@ -165,6 +165,26 @@ class ChatterboxEncoder(Encoder):
                             r.raise_for_status()
             self._uploaded[key] = ref_audio.name
         return self._uploaded[key]
+
+    def list_voices(self) -> list[PresetVoice]:
+        """The built-in preset speakers the Chatterbox server offers.
+
+        A Chatterbox preset is itself a reference clip held by the server, so it
+        is named by filename -- which is what `--voice-id` wants.
+
+        Returns:
+            The available `PresetVoice`s.
+        """
+        with requests.get(f'{self._url}/get_predefined_voices') as r:
+            r.raise_for_status()
+            voices = r.json()
+        return [
+            PresetVoice(
+                voice_id=v.get('filename', ''),
+                description=v.get('display_name', ''),
+            )
+            for v in voices
+        ]
 
     @classmethod
     def from_args(

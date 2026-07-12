@@ -21,9 +21,6 @@ class ChatterboxVoice(Voice):
 
     encoder: Literal['chatterbox'] = 'chatterbox'
     """The encoder this voice belongs to."""
-    voice_id: Optional[str] = None
-    """The built-in preset speaker (e.g. `Ryan.wav`). Mutually exclusive with
-    `ref_audio`."""
     exaggeration: Optional[float] = None
     """How expressive the delivery is (0.25-2.0). Unlike Qwen's `temperature`,
     this really is an expressiveness dial. Defaults to `None` (the server's

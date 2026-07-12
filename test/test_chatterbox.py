@@ -23,6 +23,7 @@ def mock_chatterbox() -> Iterator[MockCB]:
         response = MagicMock()
         response.content = b'audio'
         mock_requests.post.return_value.__enter__.return_value = response
+        mock_requests.get.return_value.__enter__.return_value = MagicMock()
         yield MockCB(
             mock_requests, mock_requests.post, response, mock_write_bytes
         )
@@ -231,3 +232,19 @@ class TestChatterboxEncoder():
 
         assert voice.exaggeration == 1.2
         assert voice.seed == 9
+
+
+class TestListVoices():
+    def test_lists_the_servers_presets(self, mock_chatterbox):
+        mock_chatterbox.requests.get.return_value.__enter__.return_value.json \
+            .return_value = [
+                {'display_name': 'Alice', 'filename': 'Alice.wav'},
+                {'display_name': 'Miles', 'filename': 'Miles.wav'},
+            ]
+
+        voices = ChatterboxEncoder().list_voices()
+
+        # A Chatterbox preset is a clip the server holds, so `--voice-id` wants
+        # the filename.
+        assert [v.voice_id for v in voices] == ['Alice.wav', 'Miles.wav']
+        assert [v.description for v in voices] == ['Alice', 'Miles']

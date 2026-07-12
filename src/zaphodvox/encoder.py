@@ -3,12 +3,21 @@ from abc import ABC, abstractmethod
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, NamedTuple, Optional
 
 from zaphodvox.audio import AudioParams, audio_params, create_silence
 from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.progress import ProgressBar
 from zaphodvox.voice import Voice
+
+
+class PresetVoice(NamedTuple):
+    """A built-in speaker offered by a server."""
+
+    voice_id: str
+    """The value to pass to `--voice-id`."""
+    description: str = ''
+    """What the server says about the voice."""
 
 
 class Encoder(ABC):
@@ -54,6 +63,15 @@ class Encoder(ABC):
         Returns:
             A tuple containing the `Encoder` instance and an optional
                 `Voice` instance.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_voices(self) -> list[PresetVoice]:
+        """The built-in preset speakers the server offers.
+
+        Returns:
+            The available `PresetVoice`s.
         """
         raise NotImplementedError
 

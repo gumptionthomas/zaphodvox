@@ -5,7 +5,7 @@ from typing import Optional
 import requests
 from tenacity import Retrying, stop_after_attempt
 
-from zaphodvox.encoder import Encoder
+from zaphodvox.encoder import Encoder, PresetVoice
 from zaphodvox.paths import abspath
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.voice import Voice
@@ -218,6 +218,26 @@ class QwenEncoder(Encoder):
         encoder = cls(url=args.qwen_url, audio_format=args.qwen_audio_format)
         voice = QwenVoice.from_args(args)
         return (encoder, voice)
+
+    def list_voices(self) -> list[PresetVoice]:
+        """The built-in preset speakers the Qwen server offers.
+
+        The server reports a lowercase `voice_id` but accepts the capitalized
+        `name`, which is what the docs and `--voice-id` examples use.
+
+        Returns:
+            The available `PresetVoice`s.
+        """
+        with requests.get(f'{self._url}/v1/voices') as r:
+            r.raise_for_status()
+            voices = r.json().get('voices', [])
+        return [
+            PresetVoice(
+                voice_id=v.get('name') or v.get('voice_id', ''),
+                description=v.get('description', ''),
+            )
+            for v in voices
+        ]
 
     @classmethod
     def clone_voice(

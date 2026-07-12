@@ -65,6 +65,10 @@ def main(
         args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
 
+        if args.list_voices:
+            list_voices(args, console)
+            return
+
         if args.add_voice:
             add_voice(args, console)
             return
@@ -124,6 +128,7 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
     audition: bool = bool(args.audition)
     adopt: bool = args.adopt is not None
     add_voice: bool = bool(args.add_voice)
+    list_voices: bool = args.list_voices
     proof: bool = args.proof
     add_word: bool = bool(args.add_word)
 
@@ -131,8 +136,8 @@ def handle_version_and_ntd(args: Namespace, console: Console) -> None:
         console.print(f'{Path(sys.argv[0]).stem}, version {__version__}')
         sys.exit(0)
     if not any(
-        [clean, plan, encode, concat, audition, adopt, add_voice, proof,
-         add_word]
+        [clean, plan, encode, concat, audition, adopt, add_voice, list_voices,
+         proof, add_word]
     ):
         console.print(
             "[italic dim]Nothing to do... I'd give you advice, "
@@ -159,6 +164,10 @@ def validate(args: Namespace) -> None:
     if add_word:
         if not args.dict:
             raise ValueError('--add-word requires --dict.')
+        return
+    if args.list_voices:
+        if not encoder_name:
+            raise ValueError('--list-voices requires --encoder-name.')
         return
     if args.add_voice:
         if any([args.clean, args.plan, encode, args.concat, audition,
@@ -417,44 +426,67 @@ def audition(args: Namespace, text: str, console: Console) -> None:
         )
 
     # Every candidate is the voice the command line asked for, with only the
-    # seed varied -- so this works for whatever the encoder's voice is, and a
-    # clone source re-clones itself (the candidates are synthetic takes of it,
-    # so adopting one re-anchors the voice to clean studio audio).
+    # seed (and, when shopping for a preset, the voice) varied -- so this works
+    # for whatever the encoder's voice is, and a clone source re-clones itself
+    # (the candidates are synthetic takes of it, so adopting one re-anchors the
+    # voice to clean studio audio).
     file_ext = encoder.file_extension
+    # A comma-separated --voice-id shops several presets at once. With one
+    # voice, the filenames stay as they were.
+    voice_ids = parse_voice_ids(getattr(voice, 'voice_id', None))
+    candidates = [
+        voice.model_copy(update={'seed': seed, **(
+            {'voice_id': voice_id} if voice_id else {}
+        )})
+        for voice_id in voice_ids
+        for seed in seeds
+    ]
     fragments = [
         Fragment(
             text=audition_text,
-            filename=f'{basename}-audition-{seed:02}.{file_ext}',
-            voice=voice.model_copy(update={'seed': seed})
+            filename=(
+                f'{basename}-audition-'
+                f'{voice_slug(c.voice_id) if len(voice_ids) > 1 else ""}'
+                f'{c.seed:02}.{file_ext}'
+            ),
+            voice=c
         )
-        for seed in seeds
+        for c in candidates
     ]
     encoder.encode_manifest(Manifest(fragments=fragments), encode_dir=out_dir)
 
     index = [
         {
-            'seed': seed,
+            'seed': candidate.seed,
             'filename': fragment.filename,
             'text': audition_text,
             # The voice that produced the candidate, tagged with its encoder --
             # which is how `--adopt` knows what kind of voice to build.
-            'voice': voice.model_dump(exclude_none=True),
+            'voice': candidate.model_dump(exclude_none=True),
         }
-        for seed, fragment in zip(seeds, fragments)
+        for candidate, fragment in zip(candidates, fragments)
     ]
     index_fp = file_path(None, f'{basename}-audition.json', out_dir)
     with open(str(index_fp), 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(index, indent=4))
 
-    header = f'Auditioning {voice.label}'
+    if len(voice_ids) > 1:
+        header = f'Auditioning {len(voice_ids)} preset voices'
+    else:
+        header = f'Auditioning {voice.label}'
     if voice.temperature is not None:
         header += f'  ·  temp: {voice.temperature}'
     console.print(header)
     table = Table()
+    if len(voice_ids) > 1:
+        table.add_column('voice')
     table.add_column('seed', justify='right')
     table.add_column('file')
-    for seed, fragment in zip(seeds, fragments):
-        table.add_row(str(seed), fragment.filename)
+    for candidate, fragment in zip(candidates, fragments):
+        row = [str(candidate.seed), fragment.filename or '']
+        if len(voice_ids) > 1:
+            row.insert(0, candidate.voice_id or '')
+        table.add_row(*row)
     console.print(table)
     console.print(
         f'Adopt the one you like as a clone voice, e.g. seed {seeds[0]}:\n'
@@ -484,9 +516,25 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
     voices_file: Path = args.voices_file
 
     index = json.loads(text)
-    entry = next((e for e in index if e.get('seed') == seed), None)
-    if entry is None:
+    matches = [e for e in index if e.get('seed') == seed]
+    if args.voice_id:
+        matches = [
+            e for e in matches
+            if (e.get('voice') or {}).get('voice_id') == args.voice_id
+        ]
+    if not matches:
         raise ValueError(f'No audition candidate for seed {seed}.')
+    if len(matches) > 1:
+        # An audition that shopped several presets has a candidate per voice at
+        # each seed, so the seed alone does not name one.
+        names = ', '.join(
+            (e.get('voice') or {}).get('voice_id') or '?' for e in matches
+        )
+        raise ValueError(
+            f'Several candidates have seed {seed} ({names}). Add --voice-id to '
+            'choose one.'
+        )
+    entry = matches[0]
 
     inputfile: Path = args.inputfile
     candidate = inputfile.parent / entry['filename']
@@ -516,6 +564,23 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
             '[dim]The clip now lives in the voices library; the audition '
             'files can be deleted.[/dim]'
         )
+
+
+def list_voices(args: Namespace, console: Console) -> None:
+    """Prints the built-in preset speakers the server offers.
+
+    Args:
+        args: The parsed command-line arguments.
+        console: The `Console` object.
+    """
+    encoder: Encoder = args.encoder
+    voices = encoder.list_voices()
+    table = Table(title=f'{len(voices)} preset voice(s)')
+    table.add_column('--voice-id')
+    table.add_column('description')
+    for voice in voices:
+        table.add_row(voice.voice_id, voice.description)
+    console.print(table)
 
 
 def add_voice(args: Namespace, console: Console) -> None:
@@ -813,6 +878,39 @@ def parse_indexes(index_str: Optional[str], range_length: int) -> list[int]:
     else:
         ranges.append(range(0, range_length))
     return sorted(set(sum((list(r) for r in ranges), [])))
+
+
+def voice_slug(voice_id: Optional[str]) -> str:
+    """The part of a candidate's filename that names the preset it came from.
+
+    Args:
+        voice_id: The preset speaker name (`Ryan`, or `Ryan.wav`).
+
+    Returns:
+        The filename fragment, ending in a dash (empty if there is no preset).
+    """
+    if not voice_id:
+        return ''
+    return f'{Path(voice_id).stem}-'
+
+
+def parse_voice_ids(spec: Optional[str]) -> list[Optional[str]]:
+    """Reads a comma-separated list of preset voice names.
+
+    Auditioning several presets at once is how you shop for a voice on a server
+    that cannot design one -- `--voice-id=Alice.wav,Miles.wav` rather than a
+    shell loop.
+
+    Args:
+        spec: The `--voice-id` value, which may name several voices.
+
+    Returns:
+        The voice names, or `[None]` when the voice is not a preset (a clone or
+        a design has one source, not a list).
+    """
+    if not spec:
+        return [None]
+    return [v.strip() for v in spec.split(',') if v.strip()] or [None]
 
 
 def parse_seeds(spec: str) -> list[int]:
