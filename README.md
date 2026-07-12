@@ -188,6 +188,8 @@ zaphodvox --encoder=qwen --voice-id=Ryan --encode --concat gone-bananas.txt
 
 An additional audio file, `gone-bananas.wav`, will be saved in the current directory.
 
+Concatenation is a straight copy, not a re-encode: for `wav` the samples of each fragment are streamed into the output untouched, so a whole book stitches together in a moment and no part of it is ever held in memory. (`mp3` fragments have to be decoded to be joined seamlessly, so they are handed to a single `ffmpeg` pass.)
+
 ### Cleaning
 
 Note that there isn't much silence between individual lines of the text file. To add a delay between lines, simply add an extra newline between each line of text. The easiest way to do this is to use the `--clean` option:

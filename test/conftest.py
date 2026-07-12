@@ -170,3 +170,21 @@ def mock_progress_bar() -> Iterator[MockProgressBar]:
         patch('zaphodvox.encoder.ProgressBar') as epb
     ):
         yield MockProgressBar(apb, epb)
+
+
+@pytest.fixture
+def mock_concat() -> Iterator[MagicMock]:
+    """Stands in for the audio concatenation, which is exercised for real (with
+    real files) in `test_audio.py`. Here we only care that `main` asks for it.
+    """
+    with patch('zaphodvox.main.concat_files') as mc:
+        yield mc
+
+
+@pytest.fixture
+def mock_silence() -> Iterator[MagicMock]:
+    """Stands in for silent-fragment creation, which is exercised for real in
+    `test_audio.py`.
+    """
+    with patch('zaphodvox.encoder.create_silence') as ms:
+        yield ms

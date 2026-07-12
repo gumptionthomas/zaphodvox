@@ -26,7 +26,7 @@ def speech_call(text, voice_id='Ryan', url=DEFAULT_URL, audio_format='wav',
 
 class TestEncoder():
     def test_encode(
-        self, qwen_voice, mock_audio, mock_qwen, mock_progress_bar, tmp_path
+        self, qwen_voice, mock_silence, mock_qwen, mock_progress_bar, tmp_path
     ):
         # Setup
         full_text = "Paragraph 1\n\nParagraph 2\nParagraph 3"
@@ -35,7 +35,6 @@ class TestEncoder():
         manifest = Manifest.plan(
             fragments, basename, 'wav', silence_duration=100
         )
-        mock_segment_cls, mock_segment = mock_audio
 
         # Run
         QwenEncoder().encode_manifest(
@@ -50,11 +49,13 @@ class TestEncoder():
         mock_qwen.write_bytes.assert_any_call(
             tmp_path / f'{basename}-00000.wav', b'audio'
         )
-        # Fragment #1 (silence)
-        mock_segment_cls.silent.assert_called_once_with(duration=100)
-        mock_segment.export.assert_called_once_with(
-            str(tmp_path / f'{basename}-00001.wav'), format='wav'
-        )
+        # Fragment #1 (silence), written after the speech so it can be
+        # given the same sample format.
+        mock_silence.assert_called_once()
+        duration, filepath, fmt = mock_silence.call_args.args[:3]
+        assert duration == 100
+        assert filepath == tmp_path / f'{basename}-00001.wav'
+        assert fmt == 'wav'
         # Fragment #2
         mock_qwen.post.assert_has_calls([speech_call('Paragraph 2')])
         mock_qwen.write_bytes.assert_any_call(
@@ -73,7 +74,8 @@ class TestEncoder():
         )
 
     def test_encode_max_chars(
-        self, qwen_voice, mock_audio, mock_qwen, mock_progress_bar, tmp_path
+        self, qwen_voice, mock_silence, mock_qwen, mock_progress_bar,
+        tmp_path
     ):
         # Setup
         full_text = "Paragraph 1\n\nParagraph 2\nParagraph 3"
@@ -82,8 +84,6 @@ class TestEncoder():
         manifest = Manifest.plan(
             fragments, basename, 'wav', silence_duration=100
         )
-        mock_segment_cls, mock_segment = mock_audio
-
         # Run
         QwenEncoder().encode_manifest(
             manifest, tmp_path, silence_duration=100
@@ -91,8 +91,7 @@ class TestEncoder():
 
         # Verify
         assert mock_qwen.post.call_count == 2
-        mock_segment_cls.silent.assert_not_called()
-        mock_segment.export.assert_not_called()
+        mock_silence.assert_not_called()
         # Fragment #0: the paragraph break becomes a plain-text sentence stop.
         mock_qwen.post.assert_has_calls([
             speech_call('Paragraph 1 . Paragraph 2')
