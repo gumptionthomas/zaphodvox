@@ -777,6 +777,9 @@ class TestAdopt():
         assert written == {
             'voices': {
                 'Narrator': {
+                    # The voice records which encoder it is for, so one voices
+                    # file can hold voices for more than one engine.
+                    'encoder': 'qwen',
                     'language': 'English',
                     'ref_audio': 'Narrator.wav',
                     'ref_text': 'Sample reference line for the narrator voice.',

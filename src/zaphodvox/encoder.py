@@ -57,6 +57,26 @@ class Encoder(ABC):
         """
         raise NotImplementedError
 
+    @classmethod
+    @abstractmethod
+    def clone_voice(
+        cls, ref_audio: str, entry: dict, args: Namespace
+    ) -> Voice:
+        """Builds the `Voice` that `--adopt` writes into the voices file: a
+        clone of an audition candidate.
+
+        Args:
+            ref_audio: The path of the adopted reference clip.
+            entry: The audition index entry for the adopted candidate. Its
+                `voice` key holds the settings of the voice that produced it.
+            args: The command-line arguments, whose `--voice-*` options override
+                what the audition recorded.
+
+        Returns:
+            The clone `Voice`.
+        """
+        raise NotImplementedError
+
     @abstractmethod
     def t2s(self, text: str, voice: Voice, filepath: Path) -> None:
         """Convert text to speech using the specified voice and save it to the

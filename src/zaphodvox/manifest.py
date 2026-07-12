@@ -4,8 +4,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, SerializeAsAny, field_validator
 
-from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.voice import Voice
+from zaphodvox.voices import parse_voice
 
 
 class Fragment(BaseModel):
@@ -23,20 +23,21 @@ class Fragment(BaseModel):
     @field_validator('voice', mode='before')
     @classmethod
     def _coerce_voice(cls, value: Any) -> Any:
-        """Deserializes a raw voice mapping into a concrete `QwenVoice` so an
-        inline (unnamed) manifest voice round-trips instead of collapsing to a
-        fieldless base `Voice`. Instances are passed through unchanged.
+        """Deserializes a raw voice mapping into the concrete `Voice` subclass
+        its encoder uses, so an inline (unnamed) manifest voice round-trips
+        instead of collapsing to a fieldless base `Voice`. Instances are passed
+        through unchanged.
 
         Args:
             value: The raw `voice` field value (a mapping from JSON, a `Voice`
                 instance, or `None`).
 
         Returns:
-            A `QwenVoice` if given a mapping, otherwise `value` unchanged.
+            The concrete `Voice` if given a mapping, otherwise `value` unchanged.
         """
-        if isinstance(value, dict):
-            return QwenVoice.model_validate(value)
-        return value
+        if value is None:
+            return None
+        return parse_voice(value)
     silence_duration: Optional[int] = None
     """The duration of the silence in seconds for empty lines."""
     encoder: Optional[str] = None
@@ -52,8 +53,24 @@ class Manifest(BaseModel):
 
     fragments: list[Fragment] = []
     """The list of audio file fragments and their settings."""
-    voices: Optional[dict[str, QwenVoice]] = None
+    voices: Optional[dict[str, SerializeAsAny[Voice]]] = None
     """The named voice configurations."""
+
+    @field_validator('voices', mode='before')
+    @classmethod
+    def _coerce_voices(cls, value: Any) -> Any:
+        """Deserializes each raw voice mapping into its encoder's concrete
+        `Voice` subclass, so a manifest stays self-contained.
+
+        Args:
+            value: The raw `voices` field value.
+
+        Returns:
+            The name/`Voice` mapping, or `value` unchanged.
+        """
+        if isinstance(value, dict):
+            return {k: parse_voice(v) for k, v in value.items()}
+        return value
 
     @property
     def length(self) -> int:
@@ -79,7 +96,7 @@ class Manifest(BaseModel):
         return file_ext
 
     def set_used_voices(
-        self, voices: Optional[dict[str, QwenVoice]]
+        self, voices: Optional[dict[str, Voice]]
     ) -> None:
         """Sets the used voices for the audio file fragments.
 
