@@ -189,6 +189,12 @@ def parse_args(args: list) -> Namespace:
         )
     )
     parser.add_argument(
+        '--list-voices',
+        action='store_true',
+        default=False,
+        help="List the server's built-in preset voices and exit"
+    )
+    parser.add_argument(
         '--add-voice',
         default=None,
         metavar='NAME',

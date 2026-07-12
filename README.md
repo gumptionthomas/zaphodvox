@@ -182,6 +182,38 @@ zaphodvox --encoder=qwen --voice-id=Ryan \
 
 This writes `ryan-audition-01.wav` … `ryan-audition-05.wav` (the basename defaults to the voice name; files are named by seed), plus a `ryan-audition.json` index, and prints a table of the candidates. `--voice-instruct` and `--voice-temperature` apply to every candidate (only the seed varies), so audition at the same temperature you plan to encode with. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used. (Auditioning seeds `1-5` rather than `0-4` is a fine habit — nothing is special about seed `0`, but starting at `1` avoids always judging the same seed-`0` take first.)
 
+#### Shopping for a preset voice
+
+`--list-voices` prints what the server offers:
+
+```bash
+zaphodvox --encoder=chatterbox --list-voices
+```
+
+A comma-separated `--voice-id` then auditions several of them at once — one candidate per voice, per seed — which is how you find a voice on a server that cannot design one:
+
+```bash
+zaphodvox --encoder=chatterbox --voice-id=Alice.wav,Miles.wav,Cora.wav \
+  --basename=shop --audition=1 --audition-text="..." --out-dir=refs
+```
+
+```console
+Auditioning 3 preset voices
+┏━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ voice     ┃ seed ┃ file                       ┃
+┡━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Alice.wav │    1 │ shop-audition-Alice-01.wav │
+│ Miles.wav │    1 │ shop-audition-Miles-01.wav │
+│ Cora.wav  │    1 │ shop-audition-Cora-01.wav  │
+└───────────┴──────┴────────────────────────────┘
+```
+
+Since every voice has a candidate at each seed, the seed alone no longer names one — pass `--voice-id` to `--adopt` as well:
+
+```bash
+zaphodvox --adopt=1 --voice-id=Miles.wav --voice-name=Narrator --clips-dir=clips refs/shop-audition.json
+```
+
 Listen to the candidates and adopt the one you like with `--adopt`, giving it a name and a voices file to write to (the audition index is the inputfile):
 
 ```bash

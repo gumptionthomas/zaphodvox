@@ -494,3 +494,58 @@ class TestAddVoice():
 
         assert se.value.code == 1
         assert 'requires a voice' in capfd.readouterr()[0]
+
+
+class TestAdoptFromAVoiceSweep():
+    """A preset sweep has a candidate per voice at each seed, so the seed alone
+    no longer names one.
+    """
+
+    @pytest.fixture
+    def sweep(self, tmp_path, monkeypatch) -> Path:
+        library = tmp_path / 'library'
+        refs = library / 'refs'
+        refs.mkdir(parents=True)
+        index = []
+        for name in ('Alice.wav', 'Miles.wav'):
+            filename = f'shop-audition-{name.split(".")[0]}-01.wav'
+            (refs / filename).write_bytes(f'RIFF{name}'.encode())
+            index.append({
+                'seed': 1,
+                'filename': filename,
+                'text': 'A sample sentence.',
+                'voice': {'encoder': 'chatterbox', 'voice_id': name},
+            })
+        (refs / 'shop-audition.json').write_text(
+            json.dumps(index), encoding='utf-8'
+        )
+        monkeypatch.chdir(library)
+        return library
+
+    def test_an_ambiguous_seed_is_reported(self, sweep, capfd):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--adopt', '1', '-n', 'Narrator', '-f', 'voices.json',
+                'refs/shop-audition.json',
+            ])
+
+        assert se.value.code == 1
+        out = capfd.readouterr()[0]
+        assert 'Several candidates' in out
+        assert '--voice-id' in out
+
+    def test_voice_id_chooses_the_candidate(self, sweep, capfd):
+        # Run
+        main([
+            '--adopt', '1', '-n', 'Narrator', '--voice-id', 'Miles.wav',
+            '-f', 'voices.json', '--clips-dir', 'clips',
+            'refs/shop-audition.json',
+        ])
+
+        # Verify: the chosen voice's clip, not the other one's.
+        assert (sweep / 'clips' / 'Narrator.wav').read_bytes() == b'RIFFMiles.wav'
+        voices = json.loads(
+            (sweep / 'voices.json').read_text(encoding='utf-8')
+        )
+        assert voices['voices']['Narrator']['ref_audio'] == 'clips/Narrator.wav'
+        assert voices['voices']['Narrator']['encoder'] == 'chatterbox'

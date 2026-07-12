@@ -6,7 +6,7 @@ import pytest
 
 from zaphodvox import __version__
 from zaphodvox.arg_parser import parse_args
-from zaphodvox.main import main
+from zaphodvox.main import main, parse_voice_ids
 from zaphodvox.qwen.encoder import DEFAULT_URL
 
 
@@ -958,3 +958,56 @@ class TestTextEncoding():
         plan = raw.decode('utf-8')
         assert '✓' in plan
         assert b'\r\n' not in raw
+
+
+class TestAuditionVoiceSweep():
+    """`--voice-id=A,B,C` shops several presets in one audition."""
+
+    def test_sweeps_the_named_presets(self, mock_qwen, mock_builtins_open):
+        # Setup
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-id=Ryan,Serena',
+            '--basename=shop',
+            '--audition=1-2',
+            '--audition-text=A sufficiently long sample sentence for the '
+            'narrator so the reference clip is a usable length for cloning.',
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: a candidate per voice per seed, each named for both.
+        assert mock_qwen.post.call_count == 4
+        voices = [c.kwargs['json']['voice'] for c in mock_qwen.post.call_args_list]
+        seeds = [c.kwargs['json']['seed'] for c in mock_qwen.post.call_args_list]
+        assert voices == ['Ryan', 'Ryan', 'Serena', 'Serena']
+        assert seeds == [1, 2, 1, 2]
+        for name in ('shop-audition-Ryan-01.wav', 'shop-audition-Serena-02.wav'):
+            mock_qwen.write_bytes.assert_any_call(Path(name), b'audio')
+
+    def test_a_single_voice_keeps_the_old_filenames(
+        self, mock_qwen, mock_builtins_open
+    ):
+        main([
+            '--encoder=qwen', '--voice-id=Ryan', '--audition=3',
+            '--audition-text=A sufficiently long sample sentence for the '
+            'narrator so the reference clip is a usable length for cloning.',
+        ])
+
+        mock_qwen.write_bytes.assert_called_once_with(
+            Path('ryan-audition-03.wav'), b'audio'
+        )
+
+
+class TestParseVoiceIds():
+    def test_single(self):
+        assert parse_voice_ids('Ryan') == ['Ryan']
+
+    def test_comma_list(self):
+        assert parse_voice_ids(' Alice.wav , Miles.wav ') == [
+            'Alice.wav', 'Miles.wav'
+        ]
+
+    def test_none_for_a_clone_or_design(self):
+        assert parse_voice_ids(None) == [None]

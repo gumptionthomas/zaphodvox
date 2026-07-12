@@ -22,6 +22,9 @@ class Voice(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
 
+    voice_id: Optional[str] = None
+    """The built-in preset speaker the server offers (what the server calls it:
+    `Ryan` for Qwen, `Ryan.wav` for Chatterbox). See `--list-voices`."""
     ref_audio: Optional[str] = None
     """The path to a reference audio file to clone. A relative path is resolved
     against the directory of the file that declared it (see `anchor`)."""
