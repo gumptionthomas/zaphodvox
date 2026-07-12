@@ -232,10 +232,161 @@ class TestAdoptPaths():
         ])
 
         # Verify: the library stays self-contained, so it can be moved or
-        # committed as a unit.
+        # committed as a unit -- and the clip is named for the voice, not for
+        # the audition it came out of.
         voices = json.loads(
             (audition / 'library.json').read_text(encoding='utf-8')
         )
-        assert voices['voices']['narrator']['ref_audio'] == (
-            'book-audition-3.wav'
+        assert voices['voices']['narrator']['ref_audio'] == 'narrator.wav'
+        assert (audition / 'narrator.wav').read_bytes() == b'RIFFfake'
+
+    def test_adopt_copies_the_clip_out_of_a_scratch_directory(
+        self, tmp_path, monkeypatch, capfd
+    ):
+        # Setup: the intended workflow -- audition into a scratch directory, so
+        # the library never fills up with candidates. The library holds only a
+        # voices file, so the chosen clip has to be brought in.
+        library = tmp_path / 'voices'
+        refs = library / 'refs'
+        refs.mkdir(parents=True)
+        (refs / 'narrator-audition-05.wav').write_bytes(b'RIFFchosen')
+        (refs / 'narrator-audition-01.wav').write_bytes(b'RIFFrejected')
+        (refs / 'narrator-audition.json').write_text(
+            json.dumps([
+                {'seed': 5, 'filename': 'narrator-audition-05.wav',
+                 'text': 'A sample sentence.', 'language': 'English'},
+                {'seed': 1, 'filename': 'narrator-audition-01.wav',
+                 'text': 'A sample sentence.', 'language': 'English'},
+            ]),
+            encoding='utf-8'
         )
+        monkeypatch.chdir(library)
+
+        # Run
+        main([
+            '--adopt', '5', '-n', 'Narrator',
+            '-f', 'library.json',
+            'refs/narrator-audition.json',
+        ])
+
+        # Verify: the winner is copied in under the voice's name, and the entry
+        # points at the library's own copy -- not into the scratch directory,
+        # which can now be deleted wholesale.
+        assert (library / 'Narrator.wav').read_bytes() == b'RIFFchosen'
+        voices = json.loads(
+            (library / 'library.json').read_text(encoding='utf-8')
+        )
+        assert voices['voices']['Narrator']['ref_audio'] == 'Narrator.wav'
+        # Nothing is deleted: adopting a different seed later still works.
+        assert (refs / 'narrator-audition-01.wav').exists()
+        assert (refs / 'narrator-audition-05.wav').exists()
+
+    def test_adopt_into_a_clips_subdirectory(
+        self, tmp_path, monkeypatch, capfd
+    ):
+        # Setup: a library that keeps its clips in their own subdirectory.
+        #   [library]/voices.json
+        #   [library]/clips/*.wav
+        library = tmp_path / 'library'
+        refs = library / 'ref'
+        refs.mkdir(parents=True)
+        (refs / 'narrator-audition-05.wav').write_bytes(b'RIFFchosen')
+        (refs / 'narrator-audition.json').write_text(
+            json.dumps([{
+                'seed': 5, 'filename': 'narrator-audition-05.wav',
+                'text': 'A sample sentence.', 'language': 'English',
+            }]),
+            encoding='utf-8'
+        )
+        monkeypatch.chdir(library)
+
+        # Run: --clips-dir is relative to the voices file, and does not exist
+        # yet.
+        main([
+            '--adopt', '5', '-n', 'Narrator',
+            '-f', 'voices.json', '--clips-dir', 'clips',
+            'ref/narrator-audition.json',
+        ])
+
+        # Verify: the clip lands in clips/, and the reference stays relative to
+        # the voices file -- so the library is still movable as a unit.
+        assert (library / 'clips' / 'Narrator.wav').read_bytes() == b'RIFFchosen'
+        voices = json.loads(
+            (library / 'voices.json').read_text(encoding='utf-8')
+        )
+        assert voices['voices']['Narrator']['ref_audio'] == 'clips/Narrator.wav'
+
+    def test_clips_dir_env_var_is_the_default(
+        self, tmp_path, monkeypatch, capfd
+    ):
+        # Setup: set the layout once, for every project.
+        library = tmp_path / 'library'
+        library.mkdir()
+        (library / 'narrator-audition-05.wav').write_bytes(b'RIFFchosen')
+        (library / 'audition.json').write_text(
+            json.dumps([{
+                'seed': 5, 'filename': 'narrator-audition-05.wav',
+                'text': 'A sample sentence.', 'language': 'English',
+            }]),
+            encoding='utf-8'
+        )
+        monkeypatch.chdir(library)
+        monkeypatch.setenv('ZAPHODVOX_CLIPS_DIR', 'clips')
+
+        # Run: no --clips-dir.
+        main([
+            '--adopt', '5', '-n', 'Narrator',
+            '-f', 'voices.json', 'audition.json',
+        ])
+
+        # Verify
+        assert (library / 'clips' / 'Narrator.wav').is_file()
+        voices = json.loads(
+            (library / 'voices.json').read_text(encoding='utf-8')
+        )
+        assert voices['voices']['Narrator']['ref_audio'] == 'clips/Narrator.wav'
+
+    def test_adopting_a_clip_already_in_place_does_not_copy_it(
+        self, tmp_path, monkeypatch, capfd
+    ):
+        # Setup: the candidate is already the file the voice would be copied to
+        # -- so copying would mean opening it for writing while reading it.
+        library = tmp_path / 'voices'
+        library.mkdir()
+        (library / 'Narrator.wav').write_bytes(b'RIFFfake')
+        (library / 'audition.json').write_text(
+            json.dumps([{
+                'seed': 3, 'filename': 'Narrator.wav',
+                'text': 'A sample sentence.', 'language': 'English',
+            }]),
+            encoding='utf-8'
+        )
+        monkeypatch.chdir(library)
+
+        # Run
+        main([
+            '--adopt', '3', '-n', 'Narrator',
+            '-f', 'library.json', 'audition.json',
+        ])
+
+        # Verify: the clip survives intact and is still referenced.
+        assert (library / 'Narrator.wav').read_bytes() == b'RIFFfake'
+        voices = json.loads(
+            (library / 'library.json').read_text(encoding='utf-8')
+        )
+        assert voices['voices']['Narrator']['ref_audio'] == 'Narrator.wav'
+
+    def test_adopting_twice_replaces_the_clip(self, audition, capfd):
+        # Re-adopting a voice refreshes its clip rather than failing.
+        adopt_args = [
+            '--adopt', '3', '-n', 'narrator',
+            '-f', str(audition / 'library.json'),
+            str(audition / 'book-audition.json'),
+        ]
+
+        # Run
+        main(adopt_args)
+        main(adopt_args)
+
+        # Verify
+        assert (audition / 'narrator.wav').read_bytes() == b'RIFFfake'

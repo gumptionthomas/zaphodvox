@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +38,26 @@ def expanded_path(value: str) -> Path:
         The `Path`, with a leading `~` expanded to the home directory.
     """
     return Path(value).expanduser()
+
+
+def clip_filename(voice_name: str, suffix: str) -> str:
+    """Builds the filename a voice's reference clip is stored under.
+
+    An adopted clip keeps the name of the audition candidate it came from
+    (`narrator-audition-05.wav`) unless it is renamed, which would make a voice
+    used for years carry the name of a throwaway artifact. Naming it for the
+    voice keeps a voices library readable.
+
+    Args:
+        voice_name: The name of the voice, which may contain anything a person
+            might type.
+        suffix: The file extension to use, including the dot (e.g. `.wav`).
+
+    Returns:
+        The filename for the voice's reference clip.
+    """
+    slug = re.sub(r'[^A-Za-z0-9._-]+', '-', voice_name).strip('-.')
+    return f'{slug or "voice"}{suffix}'
 
 
 def resolve_ref(raw: str, base_dir: Optional[Path] = None) -> Path:
