@@ -55,6 +55,11 @@ def main(
                 args.basename = args.inputfile.stem
             elif args.voice_id:
                 args.basename = args.voice_id.lower()
+            elif args.voice_ref_audio:
+                # A clone is named for the clip it clones, the way a preset is
+                # named for its voice id. Without this an `--audition` of a
+                # clone with no inputfile wrote "None-audition-00.wav".
+                args.basename = args.voice_ref_audio.stem
             elif args.voice_description:
                 args.basename = 'design'
         if args.out_dir:
