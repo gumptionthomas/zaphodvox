@@ -100,14 +100,23 @@ def main(
 
         if args.encode:
             assert manifest is not None
-            manifest = encode(args, manifest)
-            if args.save_manifest:
-                fn = f'{args.basename}-manifest.json'
-                fp = file_path(args.manifest_out, fn, args.out_dir)
-                write_manifest(manifest, fp)
+            try:
+                manifest = encode(args, manifest)
+            except KeyboardInterrupt:
+                # The audio already synthesized is on disk, but without the
+                # manifest naming it there is no way back to it: the run would
+                # have to start over. `encode_manifest()` fills the manifest in
+                # as it goes, so what is in hand describes exactly how far it
+                # got.
+                save_manifest(args, manifest, console, interrupted=True)
+                sys.exit(130)
+            save_manifest(args, manifest, console)
 
         if args.concat and manifest:
             concat(args, manifest)
+    except KeyboardInterrupt:
+        console.print('[yellow]Interrupted.[/yellow]')
+        sys.exit(130)
     except Exception as e:
         console.print(f'[bold red]Er, error: {e}[/bold red]')
         sys.exit(1)
@@ -360,6 +369,65 @@ def encode(args: Namespace, manifest: Manifest) -> Manifest:
     )
     manifest.set_used_voices(named_voices.voices)
     return manifest
+
+
+def save_manifest(
+    args: Namespace,
+    manifest: Manifest,
+    console: Console,
+    interrupted: bool = False
+) -> None:
+    """Writes the encoded manifest, and — when the encode was cut short — says
+        how to pick the run back up.
+
+    An interrupted encode writes the manifest even under `--no-manifest`. That
+    flag says a *finished* book does not need one; a half-finished book is
+    unrecoverable without it, since the fragments on disk are just so much
+    orphaned audio unless something records which text they are and which
+    fragments never got made.
+
+    Args:
+        args: The parsed command-line arguments.
+        manifest: The (possibly only partly) encoded `Manifest`.
+        console: The `Console` object.
+        interrupted: Whether the encode was interrupted.
+    """
+    if not (args.save_manifest or interrupted):
+        return
+    fn = f'{args.basename}-manifest.json'
+    fp = file_path(args.manifest_out, fn, args.out_dir)
+    write_manifest(manifest, fp)
+    if interrupted:
+        console.print('[yellow]Interrupted.[/yellow]')
+        console.print(f'Wrote {fp}')
+        if indexes := resume_indexes(manifest):
+            console.print(
+                f'[dim]Resume: --encode --indexes {indexes} {fp.name}[/dim]'
+            )
+
+
+def resume_indexes(manifest: Manifest) -> str:
+    """The `--indexes` spec of the fragments that were never encoded.
+
+    Args:
+        manifest: The (possibly only partly) encoded `Manifest`.
+
+    Returns:
+        The `--indexes` spec (e.g. `2-4,9`), empty if nothing is missing.
+    """
+    spans: list[list[int]] = []
+    for i, fragment in enumerate(manifest.fragments):
+        if fragment.encoded:
+            continue
+        if spans and i == spans[-1][1] + 1:
+            spans[-1][1] = i
+        else:
+            spans.append([i, i])
+    # The end of an `--indexes` range is exclusive (see `parse_indexes`), so the
+    # fragments 2 and 3 are asked for as "2-4".
+    return ','.join(
+        str(a) if a == b else f'{a}-{b + 1}' for a, b in spans
+    )
 
 
 def concat(args: Namespace, manifest: Manifest) -> None:

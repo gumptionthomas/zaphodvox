@@ -114,6 +114,9 @@ def concat_files(
         format: The format of the fragment audio files.
         output_filepath: The `Path` to the output file where the
             concatenated audio will be saved.
+
+    Raises:
+        FileNotFoundError: If any fragment's audio file is missing.
     """
     filepaths = [
         audio_dir / fragment.filename
@@ -124,6 +127,18 @@ def concat_files(
         for fragment in manifest.fragments
         if fragment.filename and fragment.text
     ]
+    # A fragment that was never encoded -- an interrupted `--encode` -- is a
+    # hole in the book, not something to work around. Concatenating what is
+    # there would hand back a finished-looking audiobook with the missing
+    # fragments silently dropped out of it.
+    if missing := [f for f in filepaths if not f.is_file()]:
+        listed = ', '.join(f.name for f in missing[:5])
+        if len(missing) > 5:
+            listed += f', and {len(missing) - 5} more'
+        raise FileNotFoundError(
+            f'{len(missing)} fragment(s) have no audio file: {listed}. '
+            'Re-encode them (--encode --indexes ...) before concatenating.'
+        )
     if format == 'wav':
         _concat_wav(filepaths, speech, output_filepath)
     else:
