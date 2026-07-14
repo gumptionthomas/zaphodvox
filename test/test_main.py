@@ -547,6 +547,35 @@ class TestAudition():
             'ryan-audition.json', 'w', **WRITE_KW
         )
 
+    def test_clone_audition_is_named_for_the_reference_clip(
+        self, mock_qwen, tmp_path, monkeypatch
+    ):
+        # A preset audition takes its basename from the voice id and a design's
+        # is "design", but a clone had no fallback at all -- so auditioning one
+        # without an inputfile wrote files called "None-audition-00.wav". Real
+        # files here: the reference clip has to exist for `validate_voice()`.
+        monkeypatch.chdir(tmp_path)
+        # `write_text`, not `write_bytes`: the `mock_qwen` fixture patches
+        # `Path.write_bytes`, which would swallow the file we are creating.
+        (tmp_path / 'thomas.wav').write_text('reference audio')
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-ref-audio=thomas.wav',
+            '--audition=0-1',
+            '--audition-text=A sufficiently long sample sentence for the '
+            'narrator so the reference clip is a usable length for cloning.',
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: the candidates are named for the clip they clone.
+        for seed in range(2):
+            mock_qwen.write_bytes.assert_any_call(
+                Path(f'thomas-audition-0{seed}.wav'), b'audio'
+            )
+        assert (tmp_path / 'thomas-audition.json').is_file()
+
     def test_audition_applies_temperature(self, mock_qwen, mock_builtins_open):
         # --voice-temperature is fixed across all candidates (seed varies).
         sys_args = [
