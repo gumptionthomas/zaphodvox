@@ -1,10 +1,12 @@
+from pathlib import Path
 from unittest.mock import call
 
 import pytest
 from pydantic import ValidationError
+from test_audio import SPEECH, read_wav, write_wav
 
 from zaphodvox.arg_parser import parse_args
-from zaphodvox.manifest import Manifest
+from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import parse_text
@@ -332,3 +334,63 @@ class TestEncoder():
 
         assert voice is not None
         assert voice.ref_audio == 'refs/ryan.wav'
+
+
+class InterruptingEncoder(QwenEncoder):
+    """Writes real audio, then stops dead partway through the book -- a Ctrl-C
+    in the middle of a long encode.
+    """
+
+    def __init__(self, stop_at: str) -> None:
+        super().__init__()
+        self._stop_at = stop_at
+
+    def t2s(self, text: str, voice: Voice, filepath: Path) -> None:
+        if text == self._stop_at:
+            raise KeyboardInterrupt
+        write_wav(filepath, SPEECH, 100)
+
+
+class TestInterruptedEncode():
+    def test_silence_already_passed_survives_an_interrupt(
+        self, qwen_voice, mock_progress_bar, tmp_path
+    ):
+        # An interrupted encode is resumed with `--indexes` over the fragments
+        # that did not get made -- so a silent fragment the encode has already
+        # walked past has to be on disk, or nothing will ever come back for it
+        # and the pause is quietly missing from the finished book.
+        manifest = Manifest(fragments=[
+            Fragment(text='One', filename='b-00000.wav', voice=qwen_voice),
+            Fragment(text='', filename='b-00001.wav', silence_duration=500),
+            Fragment(text='Two', filename='b-00002.wav', voice=qwen_voice),
+        ])
+
+        with pytest.raises(KeyboardInterrupt):
+            InterruptingEncoder(stop_at='Two').encode_manifest(
+                manifest, tmp_path
+            )
+
+        silence = tmp_path / 'b-00001.wav'
+        assert silence.is_file()
+        # And in the speech's sample format, not pydub's default.
+        params, seconds = read_wav(silence)
+        assert params == SPEECH
+        assert seconds == pytest.approx(0.5)
+
+    def test_a_leading_silence_is_still_deferred(
+        self, qwen_voice, mock_progress_bar, tmp_path
+    ):
+        # A book that opens with a blank line has no speech yet to copy a
+        # sample format from, so that one still has to wait for some.
+        manifest = Manifest(fragments=[
+            Fragment(text='', filename='b-00000.wav', silence_duration=500),
+            Fragment(text='One', filename='b-00001.wav', voice=qwen_voice),
+        ])
+
+        QwenEncoder.encode_manifest(
+            InterruptingEncoder(stop_at='never'), manifest, tmp_path
+        )
+
+        params, seconds = read_wav(tmp_path / 'b-00000.wav')
+        assert params == SPEECH
+        assert seconds == pytest.approx(0.5)

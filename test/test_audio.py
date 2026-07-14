@@ -175,6 +175,21 @@ class TestConcatWav():
         assert params == SPEECH
         assert seconds == pytest.approx(2.5, abs=0.01)
 
+    def test_a_missing_fragment_is_an_error(self, tmp_path, mock_progress_bar):
+        # A fragment that was never written -- an encode interrupted partway --
+        # must not be quietly left out of the book. Skipping it would produce a
+        # finished audiobook with a hole in it and no failure to notice.
+        write_wav(tmp_path / 'f-0.wav', SPEECH, 1000)
+        write_wav(tmp_path / 'f-2.wav', SPEECH, 1000)
+        manifest = self._manifest(['f-0.wav', 'f-1.wav', 'f-2.wav'])
+        out = tmp_path / 'book.wav'
+
+        with pytest.raises(FileNotFoundError, match='f-1.wav'):
+            concat_files(tmp_path, manifest, 'wav', out)
+
+        # And it fails before writing anything, rather than half a book.
+        assert not out.exists()
+
     def test_skips_an_unreadable_fragment(self, tmp_path, mock_progress_bar):
         # Setup
         write_wav(tmp_path / 'f-0.wav', SPEECH, 1000)
@@ -223,3 +238,21 @@ class TestConcatEncoded():
         # Every fragment, in order, is handed to the one ffmpeg call.
         for f in filenames:
             assert str((tmp_path / f).resolve().as_posix()) in listed[0]
+
+    def test_a_missing_mp3_fragment_is_an_error(
+        self, tmp_path, mock_progress_bar
+    ):
+        # The same guarantee on the encoded path: ffmpeg is never handed a
+        # concat list with a hole in it.
+        (tmp_path / 'f-0.mp3').write_bytes(b'ID3fake')
+        manifest = Manifest(fragments=[
+            Fragment(filename='f-0.mp3', text='x'),
+            Fragment(filename='f-1.mp3', text='y'),
+        ])
+        out = tmp_path / 'book.mp3'
+
+        with patch('zaphodvox.audio.subprocess.run') as run:
+            with pytest.raises(FileNotFoundError, match='f-1.mp3'):
+                concat_files(tmp_path, manifest, 'mp3', out)
+
+        run.assert_not_called()

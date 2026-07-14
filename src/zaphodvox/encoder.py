@@ -175,6 +175,7 @@ class Encoder(ABC):
                 self.validate_voice(self.fragment_voice(fragment, voices))
         total_chars = sum([len(s.text) for s in fragments])
         silences: list[tuple[int, Path]] = []
+        params: Optional[AudioParams] = None
         with ProgressBar('Encoding', total=total_chars) as bar:
             for fragment in fragments:
                 if fragment.filename is not None:
@@ -192,9 +193,22 @@ class Encoder(ABC):
                         self.t2s(fragment.text, fragment.voice, filepath)
                         bar.next(n=num_chars)
                     elif duration:
-                        # Held back until the speech exists to copy the sample
-                        # format from -- see `silence_params()`.
-                        silences.append((duration, filepath))
+                        # Written as soon as there is speech to copy the sample
+                        # format from -- see `silence_params()` -- and no later:
+                        # an encode interrupted partway is resumed over the
+                        # fragments that are missing, so a silence this run has
+                        # already walked past would never be come back for, and
+                        # the pause would be missing from the finished book.
+                        if params is None:
+                            params = self.silence_params(manifest, encode_dir)
+                        if params is not None:
+                            create_silence(
+                                duration, filepath, self.file_extension, params
+                            )
+                        else:
+                            # No speech on disk yet: a book that opens with a
+                            # blank line has nothing to copy a format from.
+                            silences.append((duration, filepath))
                     fragment.encoded = datetime.now(timezone.utc)
                     fragment.filename = filepath.name
                     fragment.encoder = self.name

@@ -1011,3 +1011,93 @@ class TestParseVoiceIds():
 
     def test_none_for_a_clone_or_design(self):
         assert parse_voice_ids(None) == [None]
+
+
+class TestInterruptedEncode():
+    """A long encode that is stopped partway has to leave behind everything
+    needed to pick it back up: the audio it made, and the manifest that says
+    what is still missing. Real files -- the rest of the suite patches `open`.
+    """
+
+    TEXT = 'Line one.\nLine two.\nLine three.\nLine four.\n'
+
+    def _interrupt_at(self, stop_at: str):
+        """A `t2s` that writes audio until it reaches `stop_at`, then Ctrl-Cs."""
+        def t2s(self, text, voice, filepath):
+            if text == stop_at:
+                raise KeyboardInterrupt
+            filepath.write_bytes(b'audio')
+        return t2s
+
+    def test_interrupted_encode_writes_the_manifest(
+        self, tmp_path, monkeypatch, mock_progress_bar
+    ):
+        # Setup
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text(self.TEXT, encoding='utf-8')
+
+        # Run: Ctrl-C on the third of four lines.
+        with patch(
+            'zaphodvox.qwen.encoder.QwenEncoder.t2s',
+            self._interrupt_at('Line three.')
+        ):
+            with pytest.raises(SystemExit) as exit:
+                main([
+                    '--encoder=qwen', '--voice-id=Ryan', '--encode', 'book.txt'
+                ])
+
+        # Verify: the manifest survives the interrupt and records exactly what
+        # got made, so the run can be resumed instead of started over.
+        assert exit.value.code != 0
+        manifest = json.loads(
+            (tmp_path / 'book-manifest.json').read_text(encoding='utf-8')
+        )
+        encoded = [f['text'] for f in manifest['fragments'] if f.get('encoded')]
+        assert encoded == ['Line one.', 'Line two.']
+
+    def test_interrupted_encode_prints_how_to_resume(
+        self, tmp_path, monkeypatch, capsys, mock_progress_bar
+    ):
+        # Setup
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text(self.TEXT, encoding='utf-8')
+
+        # Run
+        with patch(
+            'zaphodvox.qwen.encoder.QwenEncoder.t2s',
+            self._interrupt_at('Line three.')
+        ):
+            with pytest.raises(SystemExit):
+                main([
+                    '--encoder=qwen', '--voice-id=Ryan', '--encode', 'book.txt'
+                ])
+
+        # Verify: the un-encoded fragments are named as an --indexes spec, so
+        # resuming is a copy-and-paste rather than an arithmetic exercise. The
+        # missing ones are "Line three.", "Line four." and the blank fragment
+        # the trailing newline makes -- 2, 3, 4 -- and the end of an --indexes
+        # range is exclusive (see `parse_indexes`), so that is "2-5".
+        out = capsys.readouterr().out
+        assert 'book-manifest.json' in out
+        assert '--indexes 2-5' in out
+
+    def test_interrupted_encode_writes_the_manifest_even_with_no_manifest(
+        self, tmp_path, monkeypatch, mock_progress_bar
+    ):
+        # --no-manifest says a *finished* book does not need a manifest. A
+        # half-finished one is unrecoverable without it: the audio on disk is
+        # orphaned, and the hours that made it are thrown away.
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text(self.TEXT, encoding='utf-8')
+
+        with patch(
+            'zaphodvox.qwen.encoder.QwenEncoder.t2s',
+            self._interrupt_at('Line three.')
+        ):
+            with pytest.raises(SystemExit):
+                main([
+                    '--encoder=qwen', '--voice-id=Ryan', '--encode',
+                    '--no-manifest', 'book.txt'
+                ])
+
+        assert (tmp_path / 'book-manifest.json').is_file()
