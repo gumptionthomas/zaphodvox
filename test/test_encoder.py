@@ -6,11 +6,15 @@ from pydantic import ValidationError
 from test_audio import SPEECH, read_wav, write_wav
 
 from zaphodvox.arg_parser import parse_args
+from zaphodvox.http import CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT
 from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.text import parse_text
 from zaphodvox.voice import Voice
+
+DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT)
+"""The `(connect, read)` timeout every request carries unless told otherwise."""
 
 
 def speech_call(text, voice_id='Ryan', url=DEFAULT_URL, audio_format='wav',
@@ -23,7 +27,9 @@ def speech_call(text, voice_id='Ryan', url=DEFAULT_URL, audio_format='wav',
     }
     if instruct:
         json['instruct'] = instruct
-    return call(f'{url}/v1/audio/speech', json=json)
+    return call(
+        f'{url}/v1/audio/speech', json=json, timeout=DEFAULT_TIMEOUT
+    )
 
 
 class TestEncoder():
@@ -135,7 +141,8 @@ class TestEncoder():
                 'language': 'English',
                 'response_format': 'mp3',
                 'instruct': 'calm',
-            }
+            },
+            timeout=DEFAULT_TIMEOUT
         )
         mock_qwen.response.raise_for_status.assert_called_once_with()
         mock_qwen.write_bytes.assert_called_once_with(filepath, b'audio')
@@ -199,7 +206,8 @@ class TestEncoder():
                 'language': 'English',
                 'response_format': 'wav',
                 'seed': 42,
-            }
+            },
+            timeout=DEFAULT_TIMEOUT
         )
 
     def test_encode_clone_seed(self, mock_qwen, tmp_path):
@@ -234,7 +242,8 @@ class TestEncoder():
                 'response_format': 'wav',
                 'seed': 42,
                 'temperature': 0.6,
-            }
+            },
+            timeout=DEFAULT_TIMEOUT
         )
 
     def test_encode_clone_temperature(self, mock_qwen, tmp_path):
@@ -271,7 +280,8 @@ class TestEncoder():
                 'response_format': 'wav',
                 'seed': 7,
                 'temperature': 0.6,
-            }
+            },
+            timeout=DEFAULT_TIMEOUT
         )
         mock_qwen.write_bytes.assert_called_once_with(
             tmp_path / 'out.wav', b'audio'
@@ -334,6 +344,58 @@ class TestEncoder():
 
         assert voice is not None
         assert voice.ref_audio == 'refs/ryan.wav'
+
+
+class TestTimeout():
+    """Every request has to carry a timeout, or a peer that goes silent without
+    closing its connection wedges the job forever -- and the `tenacity` retry
+    around the call cannot save it, because a hang raises nothing to retry on.
+    """
+
+    def test_a_preset_request_times_out(self, mock_qwen, tmp_path):
+        QwenEncoder().t2s('Hi', QwenVoice(voice_id='Ryan'), tmp_path / 'o.wav')
+
+        assert mock_qwen.post.call_args.kwargs['timeout'] == DEFAULT_TIMEOUT
+
+    def test_a_clone_request_times_out(self, mock_qwen, tmp_path):
+        ref = tmp_path / 'ref.wav'
+        ref.write_text('reference-audio')
+        voice = QwenVoice(ref_audio=str(ref), ref_text='Hello')
+
+        QwenEncoder().t2s('Hi', voice, tmp_path / 'o.wav')
+
+        assert mock_qwen.post.call_args.kwargs['timeout'] == DEFAULT_TIMEOUT
+
+    def test_a_design_request_times_out(self, mock_qwen, tmp_path):
+        voice = QwenVoice(description='a warm elderly woman')
+
+        QwenEncoder().t2s('Hi', voice, tmp_path / 'o.wav')
+
+        assert mock_qwen.post.call_args.kwargs['timeout'] == DEFAULT_TIMEOUT
+
+    def test_listing_voices_times_out(self, mock_qwen):
+        mock_qwen.requests.get.return_value.__enter__.return_value \
+            .json.return_value = {'voices': []}
+
+        QwenEncoder().list_voices()
+
+        assert mock_qwen.requests.get.call_args.kwargs['timeout'] \
+            == DEFAULT_TIMEOUT
+
+    def test_a_given_read_timeout_is_used(self, mock_qwen, tmp_path):
+        encoder = QwenEncoder(timeout=30.0)
+
+        encoder.t2s('Hi', QwenVoice(voice_id='Ryan'), tmp_path / 'o.wav')
+
+        assert mock_qwen.post.call_args.kwargs['timeout'] \
+            == (CONNECT_TIMEOUT, 30.0)
+
+    def test_the_timeout_comes_from_the_command_line(self):
+        encoder, _ = QwenEncoder.from_args(
+            parse_args(['--voice-id', 'Ryan', '--timeout', '45'])
+        )
+
+        assert encoder._timeout == (CONNECT_TIMEOUT, 45.0)
 
 
 class InterruptingEncoder(QwenEncoder):

@@ -8,6 +8,7 @@ from tenacity import Retrying, stop_after_attempt
 
 from zaphodvox.chatterbox.voice import ChatterboxVoice
 from zaphodvox.encoder import Encoder, PresetVoice
+from zaphodvox.http import request_timeout
 from zaphodvox.voice import Voice
 
 DEFAULT_URL = 'http://127.0.0.1:8004'
@@ -37,16 +38,22 @@ class ChatterboxEncoder(Encoder):
     name = 'chatterbox'
 
     def __init__(
-        self, url: str = DEFAULT_URL, audio_format: str = 'wav'
+        self,
+        url: str = DEFAULT_URL,
+        audio_format: str = 'wav',
+        timeout: Optional[float] = None,
     ) -> None:
         """Initializes a `ChatterboxEncoder`.
 
         Args:
             url: The base URL of the Chatterbox TTS server.
             audio_format: The audio format of the generated speech.
+            timeout: The seconds to wait for a response. Defaults to
+                `DEFAULT_READ_TIMEOUT`; `0` waits forever.
         """
         self._url = url.rstrip('/')
         self._audio_format = audio_format
+        self._timeout = request_timeout(timeout)
         self._uploaded: dict[str, str] = {}
 
     @property
@@ -132,7 +139,9 @@ class ChatterboxEncoder(Encoder):
                 payload[field] = value
         for attempt in Retrying(reraise=True, stop=stop_after_attempt(5)):
             with attempt:
-                with requests.post(f'{self._url}/tts', json=payload) as r:
+                with requests.post(
+                    f'{self._url}/tts', json=payload, timeout=self._timeout
+                ) as r:
                     r.raise_for_status()
                     filepath.write_bytes(r.content)
 
@@ -161,6 +170,7 @@ class ChatterboxEncoder(Encoder):
                         with requests.post(
                             f'{self._url}/upload_reference',
                             files={'files': (ref_audio.name, ref)},
+                            timeout=self._timeout,
                         ) as r:
                             r.raise_for_status()
             self._uploaded[key] = ref_audio.name
@@ -175,7 +185,9 @@ class ChatterboxEncoder(Encoder):
         Returns:
             The available `PresetVoice`s.
         """
-        with requests.get(f'{self._url}/get_predefined_voices') as r:
+        with requests.get(
+            f'{self._url}/get_predefined_voices', timeout=self._timeout
+        ) as r:
             r.raise_for_status()
             voices = r.json()
         return [
@@ -204,6 +216,7 @@ class ChatterboxEncoder(Encoder):
         encoder = cls(
             url=args.chatterbox_url,
             audio_format=args.chatterbox_audio_format,
+            timeout=args.timeout,
         )
         voice = ChatterboxVoice.from_args(args)
         return (encoder, voice)

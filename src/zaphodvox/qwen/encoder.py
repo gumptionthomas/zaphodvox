@@ -6,6 +6,7 @@ import requests
 from tenacity import Retrying, stop_after_attempt
 
 from zaphodvox.encoder import Encoder, PresetVoice
+from zaphodvox.http import request_timeout
 from zaphodvox.paths import abspath
 from zaphodvox.qwen.voice import QwenVoice
 from zaphodvox.voice import Voice
@@ -29,6 +30,7 @@ class QwenEncoder(Encoder):
         self,
         url: Optional[str] = None,
         audio_format: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> None:
         """Initializes the `QwenEncoder` object.
 
@@ -37,11 +39,15 @@ class QwenEncoder(Encoder):
                 `DEFAULT_URL`.
             audio_format: The audio format (`response_format`) to request.
                 Defaults to `wav`.
+            timeout: The seconds to wait for a response. Defaults to
+                `DEFAULT_READ_TIMEOUT`; `0` waits forever.
         """
         self._url = (url or DEFAULT_URL).rstrip('/')
         """The base URL of the Qwen3-TTS server."""
         self._audio_format = audio_format or 'wav'
         """The audio format (`response_format`) to request."""
+        self._timeout = request_timeout(timeout)
+        """The `(connect, read)` timeout for every request."""
 
     @property
     def audio_format(self) -> str:
@@ -135,7 +141,7 @@ class QwenEncoder(Encoder):
         if voice.temperature is not None:
             payload['temperature'] = voice.temperature
         with requests.post(
-            f'{self._url}/v1/audio/speech', json=payload
+            f'{self._url}/v1/audio/speech', json=payload, timeout=self._timeout
         ) as r:
             r.raise_for_status()
             filepath.write_bytes(r.content)
@@ -170,6 +176,7 @@ class QwenEncoder(Encoder):
                 f'{self._url}/v1/audio/speech/upload',
                 data=data,
                 files={'voice_file': ref},
+                timeout=self._timeout,
             ) as r:
                 r.raise_for_status()
                 filepath.write_bytes(r.content)
@@ -195,7 +202,9 @@ class QwenEncoder(Encoder):
         if voice.temperature is not None:
             payload['temperature'] = voice.temperature
         with requests.post(
-            f'{self._url}/v1/audio/speech/design', json=payload
+            f'{self._url}/v1/audio/speech/design',
+            json=payload,
+            timeout=self._timeout,
         ) as r:
             r.raise_for_status()
             filepath.write_bytes(r.content)
@@ -215,7 +224,11 @@ class QwenEncoder(Encoder):
             A tuple containing the `QwenEncoder` instance and an optional
                 `QwenVoice` instance.
         """
-        encoder = cls(url=args.qwen_url, audio_format=args.qwen_audio_format)
+        encoder = cls(
+            url=args.qwen_url,
+            audio_format=args.qwen_audio_format,
+            timeout=args.timeout,
+        )
         voice = QwenVoice.from_args(args)
         return (encoder, voice)
 
@@ -228,7 +241,7 @@ class QwenEncoder(Encoder):
         Returns:
             The available `PresetVoice`s.
         """
-        with requests.get(f'{self._url}/v1/voices') as r:
+        with requests.get(f'{self._url}/v1/voices', timeout=self._timeout) as r:
             r.raise_for_status()
             voices = r.json().get('voices', [])
         return [

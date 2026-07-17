@@ -1,6 +1,7 @@
 import json
 from unittest.mock import patch
 
+from zaphodvox.http import CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT
 from zaphodvox.llm import (
     LLMClient,
     _chunk_lines,
@@ -89,3 +90,30 @@ class TestLLM():
             assert len(findings) == 1
             assert findings[0].line == 1
             assert findings[0].source == 'llm'
+
+
+class TestTimeout():
+    """The proofreading pass has the same hang to avoid as the encoders, and a
+    local LLM is if anything slower to first token than a TTS server.
+    """
+
+    def test_a_completion_times_out(self):
+        with patch('zaphodvox.llm.requests') as mock_requests:
+            response = mock_requests.post.return_value.__enter__.return_value
+            response.json.return_value = _completion('{"findings": []}')
+
+            LLMClient('http://host:1234').complete_json('s', 'u', {})
+
+            assert mock_requests.post.call_args.kwargs['timeout'] \
+                == (CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT)
+
+    def test_a_given_read_timeout_is_used(self):
+        with patch('zaphodvox.llm.requests') as mock_requests:
+            response = mock_requests.post.return_value.__enter__.return_value
+            response.json.return_value = _completion('{"findings": []}')
+
+            LLMClient('http://host:1234', timeout=30.0) \
+                .complete_json('s', 'u', {})
+
+            assert mock_requests.post.call_args.kwargs['timeout'] \
+                == (CONNECT_TIMEOUT, 30.0)

@@ -753,7 +753,7 @@ def proof(args: Namespace, text: str, console: Console) -> None:
     speller = build_speller(args.dict_language, load_words(dict_path))
     findings = proof_text(text, speller).findings
     if args.llm_url:
-        client = LLMClient(args.llm_url, args.llm_model)
+        client = LLMClient(args.llm_url, args.llm_model, timeout=args.timeout)
         findings += proofread(text, client)
     report = ProofReport.from_findings(findings)
     report.source_file = str(args.inputfile)
