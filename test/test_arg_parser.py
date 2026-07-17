@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from zaphodvox.arg_parser import parse_args
+from zaphodvox.http import DEFAULT_READ_TIMEOUT
 from zaphodvox.qwen.encoder import DEFAULT_URL
 
 
@@ -138,3 +139,23 @@ class TestTildeExpansion():
 
         assert args.out_dir == Path('out')
         assert args.inputfile == Path('book.txt')
+
+
+class TestTimeout():
+    def test_defaults_to_the_default_read_timeout(self):
+        assert parse_args([]).timeout == DEFAULT_READ_TIMEOUT
+
+    def test_is_read_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv('ZAPHODVOX_TIMEOUT', '45')
+
+        assert parse_args([]).timeout == 45.0
+
+    def test_the_command_line_beats_the_environment(self, monkeypatch):
+        monkeypatch.setenv('ZAPHODVOX_TIMEOUT', '45')
+
+        assert parse_args(['--timeout', '90']).timeout == 90.0
+
+    def test_zero_is_allowed(self):
+        # The escape hatch: no timeout at all, the old behavior, for a server so
+        # slow that any number would be a guess.
+        assert parse_args(['--timeout', '0']).timeout == 0.0

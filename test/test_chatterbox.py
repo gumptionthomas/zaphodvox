@@ -8,8 +8,12 @@ import pytest
 
 from zaphodvox.chatterbox.encoder import DEFAULT_URL, ChatterboxEncoder
 from zaphodvox.chatterbox.voice import ChatterboxVoice
+from zaphodvox.http import CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT
 from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.voices import parse_voice
+
+DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT)
+"""The `(connect, read)` timeout every request carries unless told otherwise."""
 
 MockCB = namedtuple('MockCB', ['requests', 'post', 'response', 'write_bytes'])
 
@@ -45,6 +49,7 @@ def args(**kwargs) -> Namespace:
         'voice_speed': None,
         'chatterbox_url': DEFAULT_URL,
         'chatterbox_audio_format': 'wav',
+        'timeout': None,
     }
     return Namespace(**{**defaults, **kwargs})
 
@@ -131,6 +136,7 @@ class TestChatterboxEncoder():
                 'speed_factor': 1.1,
                 'seed': 42,
             },
+            timeout=DEFAULT_TIMEOUT,
         )
         mock_chatterbox.write_bytes.assert_called_once_with(
             Path('out.wav'), b'audio'
@@ -248,3 +254,52 @@ class TestListVoices():
         # the filename.
         assert [v.voice_id for v in voices] == ['Alice.wav', 'Miles.wav']
         assert [v.description for v in voices] == ['Alice', 'Miles']
+
+
+class TestTimeout():
+    """As on qwen: no timeout means a silent peer wedges the job forever, and
+    the retry around the call cannot fire on a hang.
+    """
+
+    def test_a_tts_request_times_out(self, mock_chatterbox, tmp_path):
+        voice = ChatterboxVoice(voice_id='Ryan.wav')
+
+        ChatterboxEncoder().t2s('Hi', voice, tmp_path / 'o.wav')
+
+        assert mock_chatterbox.post.call_args.kwargs['timeout'] \
+            == DEFAULT_TIMEOUT
+
+    def test_a_reference_upload_times_out(self, mock_chatterbox, tmp_path):
+        ref = tmp_path / 'ref.wav'
+        ref.write_text('reference-audio')
+        voice = ChatterboxVoice(ref_audio=str(ref))
+
+        ChatterboxEncoder().t2s('Hi', voice, tmp_path / 'o.wav')
+
+        upload = mock_chatterbox.post.call_args_list[0]
+        assert upload.args[0].endswith('/upload_reference')
+        assert upload.kwargs['timeout'] == DEFAULT_TIMEOUT
+
+    def test_listing_voices_times_out(self, mock_chatterbox):
+        mock_chatterbox.requests.get.return_value.__enter__.return_value \
+            .json.return_value = []
+
+        ChatterboxEncoder().list_voices()
+
+        assert mock_chatterbox.requests.get.call_args.kwargs['timeout'] \
+            == DEFAULT_TIMEOUT
+
+    def test_a_given_read_timeout_is_used(self, mock_chatterbox, tmp_path):
+        encoder = ChatterboxEncoder(timeout=30.0)
+
+        encoder.t2s('Hi', ChatterboxVoice(voice_id='R.wav'), tmp_path / 'o.wav')
+
+        assert mock_chatterbox.post.call_args.kwargs['timeout'] \
+            == (CONNECT_TIMEOUT, 30.0)
+
+    def test_the_timeout_comes_from_the_command_line(self):
+        encoder, _ = ChatterboxEncoder.from_args(args(
+            voice_id='Ryan.wav', timeout=45.0
+        ))
+
+        assert encoder._timeout == (CONNECT_TIMEOUT, 45.0)

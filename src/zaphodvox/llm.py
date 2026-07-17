@@ -4,6 +4,7 @@ from typing import Optional
 import requests
 from tenacity import Retrying, stop_after_attempt
 
+from zaphodvox.http import request_timeout
 from zaphodvox.progress import ProgressBar
 from zaphodvox.proof import ProofFinding
 from zaphodvox.text import end_of_sentence
@@ -64,6 +65,7 @@ class LLMClient:
         url: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.1,
+        timeout: Optional[float] = None,
     ) -> None:
         """Initializes the `LLMClient`.
 
@@ -73,6 +75,8 @@ class LLMClient:
             model: The model id (optional; the server may use its loaded
                 model).
             temperature: The sampling temperature (low for consistency).
+            timeout: The seconds to wait for a completion. Defaults to
+                `DEFAULT_READ_TIMEOUT`; `0` waits forever.
         """
         self._url = (url or DEFAULT_LLM_URL).rstrip('/')
         """The base URL of the local LLM server."""
@@ -80,6 +84,8 @@ class LLMClient:
         """The model id."""
         self._temperature = temperature
         """The sampling temperature."""
+        self._timeout = request_timeout(timeout)
+        """The `(connect, read)` timeout for every request."""
 
     def complete_json(self, system: str, user: str, schema: dict) -> str:
         """Requests a JSON completion from the chat endpoint.
@@ -105,7 +111,9 @@ class LLMClient:
         for attempt in Retrying(reraise=True, stop=stop_after_attempt(3)):
             with attempt:
                 with requests.post(
-                    f'{self._url}/v1/chat/completions', json=payload
+                    f'{self._url}/v1/chat/completions',
+                    json=payload,
+                    timeout=self._timeout,
                 ) as response:
                     response.raise_for_status()
                     data = response.json()

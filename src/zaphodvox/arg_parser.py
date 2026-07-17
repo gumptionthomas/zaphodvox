@@ -5,6 +5,7 @@ from zaphodvox.chatterbox.encoder import DEFAULT_URL as CHATTERBOX_DEFAULT_URL
 from zaphodvox.chatterbox.encoder import ChatterboxEncoder  # noqa: F401
 from zaphodvox.chatterbox.encoder import default_url as chatterbox_url
 from zaphodvox.encoder import Encoder
+from zaphodvox.http import DEFAULT_READ_TIMEOUT, default_timeout
 from zaphodvox.paths import expanded_path
 from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder  # noqa: F401
 
@@ -124,6 +125,18 @@ def parse_args(args: list) -> Namespace:
             'The comma-delimited list of manifest audio file indexes '
             '(0-based, \'-\' delimited ranges) to encode '
             '(default: all indexes)'
+        )
+    )
+    parser.add_argument(
+        '--timeout',
+        type=float,
+        default=default_timeout(),
+        metavar='SECONDS',
+        help=(
+            'How long to wait for a response from a TTS or LLM server before '
+            'giving up and retrying; raise it if a first request has to load a '
+            'model, lower it to notice a dead server sooner, or set 0 to wait '
+            f'forever (default: $ZAPHODVOX_TIMEOUT or {DEFAULT_READ_TIMEOUT:g})'
         )
     )
     parser.add_argument(

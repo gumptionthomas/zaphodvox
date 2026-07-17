@@ -6,8 +6,12 @@ import pytest
 
 from zaphodvox import __version__
 from zaphodvox.arg_parser import parse_args
+from zaphodvox.http import CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT
 from zaphodvox.main import main, parse_voice_ids
 from zaphodvox.qwen.encoder import DEFAULT_URL
+
+DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT)
+"""The `(connect, read)` timeout every request carries unless told otherwise."""
 
 
 # Text I/O is always UTF-8, never the locale codepage (cp1252 on Windows), and
@@ -35,7 +39,8 @@ def speech_call(text, voice_id='Ryan', url=DEFAULT_URL, language='English',
             'voice': voice_id,
             'language': language,
             'response_format': audio_format,
-        }
+        },
+        timeout=DEFAULT_TIMEOUT
     )
 
 
