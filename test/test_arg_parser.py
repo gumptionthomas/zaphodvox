@@ -159,3 +159,10 @@ class TestTimeout():
         # The escape hatch: no timeout at all, the old behavior, for a server so
         # slow that any number would be a guess.
         assert parse_args(['--timeout', '0']).timeout == 0.0
+
+    def test_a_negative_timeout_is_rejected_on_the_command_line(self):
+        # Not deep inside a request, five retries into a book.
+        with pytest.raises(SystemExit), redirect_stderr(StringIO()) as err:
+            parse_args(['--timeout', '-5'])
+
+        assert 'negative' in err.getvalue()

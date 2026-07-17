@@ -1,13 +1,39 @@
 import os
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, ArgumentTypeError, Namespace
 
 from zaphodvox.chatterbox.encoder import DEFAULT_URL as CHATTERBOX_DEFAULT_URL
 from zaphodvox.chatterbox.encoder import ChatterboxEncoder  # noqa: F401
 from zaphodvox.chatterbox.encoder import default_url as chatterbox_url
 from zaphodvox.encoder import Encoder
-from zaphodvox.http import DEFAULT_READ_TIMEOUT, default_timeout
+from zaphodvox.http import (
+    DEFAULT_READ_TIMEOUT,
+    default_timeout,
+    request_timeout,
+)
 from zaphodvox.paths import expanded_path
 from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder  # noqa: F401
+
+
+def timeout_seconds(value: str) -> float:
+    """Parses a `--timeout` value.
+
+    Args:
+        value: The command-line value.
+
+    Returns:
+        The seconds to wait for a response.
+
+    Raises:
+        ArgumentTypeError: If `value` is not a non-negative number.
+    """
+    try:
+        seconds = float(value)
+        # `request_timeout()` owns the rule; this only puts the complaint on the
+        # command line, where the typo is, instead of inside a request.
+        request_timeout(seconds)
+    except ValueError as e:
+        raise ArgumentTypeError(str(e)) from e
+    return seconds
 
 
 def parse_args(args: list) -> Namespace:
@@ -129,7 +155,7 @@ def parse_args(args: list) -> Namespace:
     )
     parser.add_argument(
         '--timeout',
-        type=float,
+        type=timeout_seconds,
         default=default_timeout(),
         metavar='SECONDS',
         help=(

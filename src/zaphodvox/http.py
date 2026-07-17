@@ -41,9 +41,20 @@ def request_timeout(
 
     Returns:
         A `(connect, read)` tuple, or `None` to wait forever.
+
+    Raises:
+        ValueError: If `read` is negative.
     """
     if read is None:
         read = DEFAULT_READ_TIMEOUT
+    if read < 0:
+        # `requests` would take this and complain only once the request is
+        # under way -- from inside the retry, so a mistyped "-5" would be five
+        # confusing failures partway through a book instead of one complaint.
+        raise ValueError(
+            f'A timeout cannot be negative (got {read:g}). Pass the seconds to '
+            'wait for a response, or 0 to wait forever.'
+        )
     if not read:
         return None
     return (CONNECT_TIMEOUT, read)

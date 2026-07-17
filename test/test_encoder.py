@@ -317,6 +317,34 @@ class TestEncoder():
         with pytest.raises(ValueError, match='Not a QwenVoice'):
             QwenEncoder().t2s('Hello', Voice(), tmp_path / 'out.wav')
 
+    def test_qwen_voice_requires_a_source(self):
+        with pytest.raises(ValidationError):
+            QwenVoice()
+
+    def test_qwen_voice_exactly_one_source(self):
+        with pytest.raises(ValidationError):
+            QwenVoice(voice_id='Ryan', ref_audio='ref.wav')
+        with pytest.raises(ValidationError):
+            QwenVoice(voice_id='Ryan', description='a narrator')
+
+    def test_qwen_voice_is_clone(self):
+        assert QwenVoice(voice_id='Ryan').is_clone is False
+        assert QwenVoice(ref_audio='ref.wav').is_clone is True
+
+    def test_qwen_voice_is_design(self):
+        assert QwenVoice(description='a calm narrator').is_design is True
+        assert QwenVoice(voice_id='Ryan').is_design is False
+
+    def test_qwen_voice_from_args_ref_audio_is_posix(self):
+        args = parse_args(
+            ['--encode', '--voice-ref-audio', 'refs/ryan.wav', 'test.txt']
+        )
+
+        voice = QwenVoice.from_args(args)
+
+        assert voice is not None
+        assert voice.ref_audio == 'refs/ryan.wav'
+
 
 class TestTimeout():
     """Every request has to carry a timeout, or a peer that goes silent without
@@ -368,34 +396,6 @@ class TestTimeout():
         )
 
         assert encoder._timeout == (CONNECT_TIMEOUT, 45.0)
-
-    def test_qwen_voice_requires_a_source(self):
-        with pytest.raises(ValidationError):
-            QwenVoice()
-
-    def test_qwen_voice_exactly_one_source(self):
-        with pytest.raises(ValidationError):
-            QwenVoice(voice_id='Ryan', ref_audio='ref.wav')
-        with pytest.raises(ValidationError):
-            QwenVoice(voice_id='Ryan', description='a narrator')
-
-    def test_qwen_voice_is_clone(self):
-        assert QwenVoice(voice_id='Ryan').is_clone is False
-        assert QwenVoice(ref_audio='ref.wav').is_clone is True
-
-    def test_qwen_voice_is_design(self):
-        assert QwenVoice(description='a calm narrator').is_design is True
-        assert QwenVoice(voice_id='Ryan').is_design is False
-
-    def test_qwen_voice_from_args_ref_audio_is_posix(self):
-        args = parse_args(
-            ['--encode', '--voice-ref-audio', 'refs/ryan.wav', 'test.txt']
-        )
-
-        voice = QwenVoice.from_args(args)
-
-        assert voice is not None
-        assert voice.ref_audio == 'refs/ryan.wav'
 
 
 class InterruptingEncoder(QwenEncoder):

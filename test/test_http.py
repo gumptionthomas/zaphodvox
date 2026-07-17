@@ -1,3 +1,5 @@
+import pytest
+
 from zaphodvox.http import (
     CONNECT_TIMEOUT,
     DEFAULT_READ_TIMEOUT,
@@ -18,6 +20,13 @@ class TestRequestTimeout():
         # `requests` reads `None` as "block forever", which is the escape hatch
         # for a server so slow that any number would be a guess.
         assert request_timeout(0) is None
+
+    def test_a_negative_timeout_is_rejected(self):
+        # A typo, but `requests` only rejects it once the request is under way
+        # -- inside the retry, so a mistyped "-5" became five confusing failures
+        # partway through a book rather than one complaint on the command line.
+        with pytest.raises(ValueError, match='negative'):
+            request_timeout(-5.0)
 
     def test_the_default_read_timeout_outlasts_a_lazy_model_load(self):
         # The trap this whole thing has to avoid: a first request to a clone or
