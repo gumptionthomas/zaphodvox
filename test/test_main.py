@@ -144,6 +144,34 @@ class TestMain():
         )
         assert mock_write.call_count == 1
 
+    def test_main_text_indexes(
+        self, mock_silence, mock_builtins_open, mock_qwen
+    ):
+        # --indexes selects fragments of the plan built from a plain text file,
+        # not just of a manifest read from disk: `--encode --indexes 2-4 book.txt`
+        # plans the whole book and then synthesizes only fragments 2 and 3.
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-id=Ryan',
+            '--basename=test',
+            '--encode',
+            '--indexes=2-4',
+            '--no-manifest',
+            'test.txt',
+        ]
+        mock_builtins_open.side_effect = (
+            mock_open(read_data='L0\nL1\nL2\nL3\nL4\nL5').return_value,
+            mock_builtins_open.return_value,
+        )
+
+        main(sys_args)
+
+        # Only fragments 2 and 3 (the half-open range 2-4) are synthesized.
+        assert mock_qwen.post.call_count == 2
+        mock_qwen.post.assert_has_calls([speech_call('L2')])
+        mock_qwen.post.assert_has_calls([speech_call('L3')])
+        assert mock_qwen.write_bytes.call_count == 2
+
     def test_main_manifest_inline_voice(
         self, mock_audio, mock_builtins_open, mock_qwen,
         inline_voice_manifest_json_data, text_to_encode
