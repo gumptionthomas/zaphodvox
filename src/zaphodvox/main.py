@@ -87,7 +87,6 @@ def main(
             return
 
         args.named_voices = read_voices(args.voices_file, manifest)
-        args.indexes = args.indexes if manifest else None
 
         if args.audition:
             audition(args, text, console)
