@@ -16,7 +16,7 @@ from zaphodvox.manifest import Fragment, Manifest
 from zaphodvox.named_voices import NamedVoices
 from zaphodvox.arg_parser import parse_args
 from zaphodvox.llm import LLMClient, proofread
-from zaphodvox.paths import abspath, clip_filename, rebase_ref
+from zaphodvox.paths import abspath, clip_filename, name_slug, rebase_ref
 from zaphodvox.proof import ProofReport, proof_text
 from zaphodvox.text import clean_text, parse_text
 from zaphodvox.voice import Voice
@@ -55,6 +55,11 @@ def main(
                 args.basename = args.inputfile.stem
             elif args.voice_id:
                 args.basename = args.voice_id.lower()
+            elif args.voice_name:
+                # A library voice is named for itself, so an audition of it
+                # writes `narrator-audition-00.wav`. The name is free text; the
+                # filename cannot be.
+                args.basename = name_slug(args.voice_name)
             elif args.voice_ref_audio:
                 # A clone is named for the clip it clones, the way a preset is
                 # named for its voice id. Without this an `--audition` of a
@@ -208,17 +213,19 @@ def validate(args: Namespace) -> None:
                 '--audition cannot be combined with other actions.'
             )
         sources = [
-            args.voice_id, args.voice_ref_audio, args.voice_description
+            args.voice_id, args.voice_ref_audio, args.voice_description,
+            args.voice_name
         ]
         if not any(sources):
             raise ValueError(
                 'Auditioning requires a preset "--voice-id", a clone '
-                '"--voice-ref-audio", or a "--voice-description".'
+                '"--voice-ref-audio", a "--voice-description", or the '
+                '"--voice-name" of a voice in the "--voices-file".'
             )
         if sum(source is not None for source in sources) > 1:
             raise ValueError(
-                'Specify exactly one of "--voice-id", "--voice-ref-audio", or '
-                '"--voice-description".'
+                'Specify exactly one of "--voice-id", "--voice-ref-audio", '
+                '"--voice-description", or "--voice-name".'
             )
         if not (args.audition_text or inputfile):
             raise ValueError('No audition text specified.')
@@ -470,6 +477,9 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     doing once, from the original recording — not to a clip that is itself
     already a synthetic take.
 
+    The voice to audition may equally be named with `--voice-name`, which is
+    the same voice described a shorter way (see `named_audition_voice()`).
+
     Args:
         args: The parsed command-line arguments.
         text: The input file text, used for the sample sentence when
@@ -482,7 +492,8 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     basename: str = args.basename
     encoder: Encoder = args.encoder
     out_dir: Optional[Path] = args.out_dir
-    voice: Voice = args.voice
+    voice: Voice = args.voice or named_audition_voice(args)
+    voice_name: Optional[str] = args.voice_name
 
     seeds = parse_seeds(args.audition)
     audition_text = args.audition_text or next(
@@ -527,6 +538,14 @@ def audition(args: Namespace, text: str, console: Console) -> None:
     ]
     encoder.encode_manifest(Manifest(fragments=fragments), encode_dir=out_dir)
 
+    index_fp = file_path(None, f'{basename}-audition.json', out_dir)
+    # A clone's `ref_audio` is anchored to the file that declared it -- a voices
+    # file elsewhere, or the working directory -- and the index is not that
+    # file, so the path has to be rewritten to stay valid from here. Rebase
+    # copies: the live candidates were just encoded with, and repointing them at
+    # the index would be a lie about where their audio actually came from.
+    recorded = [candidate.model_copy(deep=True) for candidate in candidates]
+    rebase_voices(recorded, index_fp.parent)
     index = [
         {
             'seed': candidate.seed,
@@ -536,9 +555,8 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             # which is how `--adopt` knows what kind of voice to build.
             'voice': candidate.model_dump(exclude_none=True),
         }
-        for candidate, fragment in zip(candidates, fragments)
+        for candidate, fragment in zip(recorded, fragments)
     ]
-    index_fp = file_path(None, f'{basename}-audition.json', out_dir)
     with open(str(index_fp), 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(index, indent=4))
 
@@ -560,20 +578,82 @@ def audition(args: Namespace, text: str, console: Console) -> None:
             row.insert(0, candidate.voice_id or '')
         table.add_row(*row)
     console.print(table)
+    # Auditioned by name, the hint is the whole command. Adopting appends the
+    # take's seed, so the name to reach for afterwards (in a `ZVOX:` tag, or
+    # `--voice-name`) is not the one that was auditioned -- say which it is.
+    name = voice_name or '<name>'
     console.print(
-        f'Adopt the one you like as a clone voice, e.g. seed {seeds[0]}:\n'
-        f'  zaphodvox --adopt {seeds[0]} --voice-name <name> --voices-file '
-        f'voices.json {index_fp}'
+        f'Adopt the one you like as a clone voice, e.g. seed {seeds[0]} '
+        f'(adopted as "{name}-{seeds[0]:02}"):\n'
+        f'  zaphodvox --adopt {seeds[0]} --voice-name "{name}"'
+        f' --voices-file "{args.voices_file or "voices.json"}" {index_fp}'
     )
     console.print(f'[dim]Index written to {index_fp}[/dim]')
+
+
+def named_audition_voice(args: Namespace) -> Voice:
+    """Resolves the `--voice-name` an audition was asked for against the voices
+        file.
+
+    A voice worth auditioning is very often one the library already holds — a
+    human recording to be laundered into a clean reference, a preset whose seed
+    never quite suited — and restating its clip, transcript and settings on the
+    command line to re-take it is an invitation to get one of them subtly wrong.
+    Named, it is the same voice by construction, and `--adopt --voice-name` then
+    writes the winner back over the voice it came from.
+
+    The stored `seed` and `temperature` are deliberately dropped: the seed is
+    the very thing the sweep varies, and the temperature belongs to the audition
+    (`--voice-temperature`), not to the voice being auditioned.
+
+    Args:
+        args: The parsed command-line arguments.
+
+    Returns:
+        The named `Voice`, ready for the sweep to vary.
+
+    Raises:
+        ValueError: If no voice of that name was read, or it belongs to another
+            encoder.
+    """
+    encoder: Encoder = args.encoder
+    named_voices: NamedVoices = args.named_voices
+    voice_name: str = args.voice_name
+    voices_file: Optional[Path] = args.voices_file
+
+    voice = named_voices.encoder_voices().get(voice_name)
+    if voice is None:
+        where = f'"{voices_file}"' if voices_file else 'the voices file'
+        raise ValueError(f'No voice named "{voice_name}" in {where}.')
+    # One library file holds both engines' voices, so a name alone can name a
+    # voice this encoder cannot speak. Say which, rather than fail deep in the
+    # encoder with "Not a QwenVoice".
+    voice_encoder = getattr(voice, 'encoder', None)
+    if voice_encoder != encoder.name:
+        raise ValueError(
+            f'Voice "{voice_name}" is a {voice_encoder} voice, but '
+            f'"--encoder-name" is {encoder.name}.'
+        )
+    return voice.model_copy(
+        update={'seed': None, 'temperature': args.voice_temperature}
+    )
 
 
 def adopt(args: Namespace, text: str, console: Console) -> None:
     """Adopts an audition candidate as a clone voice in a voices file.
 
-    Reads the audition index (the inputfile), builds a `Voice` that clones
-    the candidate for the requested seed, and adds/updates it under
-    `--voice-name` in `--voices-file` (created if it does not exist).
+    Reads the audition index (the inputfile), builds a `Voice` that clones the
+    candidate for the requested seed, and adds it to `--voices-file` (created if
+    it does not exist) under `--voice-name` **with the seed appended**:
+    `--adopt 5 --voice-name Narrator` writes `Narrator-05`, cloning
+    `Narrator-05.wav`.
+
+    The seed in the name is what keeps adopting non-destructive. Clips are named
+    for the voice they belong to, so a bare `--voice-name` would have every take
+    of a voice — and the human recording an audition was laundering in the first
+    place — land on the same filename, each one overwriting the last. Named for
+    the take, several can be adopted from one audition and compared side by side,
+    and the source they were cloned from is still there to go back to.
 
     Args:
         args: The parsed command-line arguments.
@@ -610,10 +690,14 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
 
     inputfile: Path = args.inputfile
     candidate = inputfile.parent / entry['filename']
+    # The take is part of the name (`Narrator-05`), so nothing an audition
+    # adopts overwrites anything -- neither a sibling take nor the recording the
+    # audition was cloning. Zero-padded to two, as the candidates are.
+    adopted_name = f'{voice_name}-{seed:02}'
     # A relative --clips-dir belongs to the voices file, not to wherever the
     # command was run: it is part of the library's own layout.
     clips_dir: Path = voices_file.parent / (args.clips_dir or Path('.'))
-    clip = clips_dir / clip_filename(voice_name, candidate.suffix)
+    clip = clips_dir / clip_filename(adopted_name, candidate.suffix)
     copied = copy_clip(candidate, clip)
     # An index written before there was a second backend has no source voice
     # recorded, and describes a Qwen voice with its settings spread flat -- which
@@ -630,7 +714,7 @@ def adopt(args: Namespace, text: str, console: Console) -> None:
 
     if copied:
         console.print(f'Copied {candidate} -> {clip}')
-    write_named_voice(voices_file, voice_name, voice, console)
+    write_named_voice(voices_file, adopted_name, voice, console)
     if copied:
         console.print(
             '[dim]The clip now lives in the voices library; the audition '
