@@ -171,7 +171,7 @@ A seed makes a given fragment *reproducible*, but the model still reads differen
 
 > "The ships hung in the sky in much the same way that bricks don't."
 
-For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes a candidate clip of a preset (`--voice-id`), designed (`--voice-description`), or cloned (`--voice-ref-audio`) voice for each seed you specify — using the same syntax as `--indexes` (`5`, `1-5`, `3,9,20`) — from a sample sentence you provide:
+For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes a candidate clip of a preset (`--voice-id`), designed (`--voice-description`), cloned (`--voice-ref-audio`), or already-named (`--voice-name`) voice for each seed you specify — using the same syntax as `--indexes` (`5`, `1-5`, `3,9,20`) — from a sample sentence you provide:
 
 ```bash
 zaphodvox --encoder=qwen --voice-id=Ryan \
@@ -181,6 +181,15 @@ zaphodvox --encoder=qwen --voice-id=Ryan \
 ```
 
 This writes `ryan-audition-01.wav` … `ryan-audition-05.wav` (the basename defaults to the voice name; files are named by seed), plus a `ryan-audition.json` index, and prints a table of the candidates. `--voice-instruct` and `--voice-temperature` apply to every candidate (only the seed varies), so audition at the same temperature you plan to encode with. Aim for ~10–15 seconds of speech in `--audition-text` so the clip works well as a reference; a short sample gets a warning. If `--audition-text` is omitted, the first line of the `inputfile` is used. (Auditioning seeds `1-5` rather than `0-4` is a fine habit — nothing is special about seed `0`, but starting at `1` avoids always judging the same seed-`0` take first.)
+
+Exactly one voice source is allowed, and `--voice-name` is one of them: a voice already in your `--voices-file` is auditioned as it stands, without restating its clip and transcript.
+
+```bash
+zaphodvox --encoder=qwen --voice-name=Narrator --voices-file=voices.json \
+  --audition=1-5 --audition-text="..." --out-dir=refs
+```
+
+The voice's stored `seed` and `temperature` do **not** carry over: the seed is the very thing the sweep varies, and the temperature is the audition's own dial (pass `--voice-temperature` to set it, or leave it to the server's default). Everything else — the reference clip, its transcript, the language, a preset's `instruct` — is used exactly as stored, with a relative `ref_audio` resolved against the voices file as always. The candidates are written as `Narrator-audition-01.wav` …, and adopting one adds it to the library as `Narrator-01` — a voice of its own, cloned from clean audio — leaving the voice it was auditioned from exactly as it was.
 
 #### Shopping for a preset voice
 
@@ -220,7 +229,7 @@ Listen to the candidates and adopt the one you like with `--adopt`, giving it a 
 zaphodvox --adopt=2 --voice-name=Narrator --voices-file=voices.json refs/ryan-audition.json
 ```
 
-This adds (or updates) a `Narrator` clone voice in `voices.json`, carrying over the candidate's `ref_text`, `seed`, and `temperature` from the audition. The chosen clip is **copied in beside the voices file, named for the voice** (`Narrator.wav`) — so the voices file and every clip it refers to stay together, and the audition output is left as the throwaway it is. Nothing is deleted: the candidates you passed on stay where they are, and you can go back and adopt a different seed later. From then on, `ZVOX: Narrator` (or `--voice-name=Narrator`) reads with that voice. `--voice-seed`/`--voice-temperature` override the carried-over values if given. Auditioning and adopting are each their own mode and can't be combined with `--encode`/`--plan`/`--concat`.
+This adds a **`Narrator-02`** clone voice to `voices.json`, carrying over the candidate's `ref_text`, `seed`, and `temperature` from the audition. **The seed is appended to the name you give** — the adopted voice is named for the take it is, which is what keeps adopting from ever overwriting anything: adopt seeds `2` and `6` from the same audition and you get `Narrator-02` and `Narrator-06`, side by side, to compare over a chapter before you commit to one. The chosen clip is **copied in beside the voices file, named for the voice** (`Narrator-02.wav`) — so the voices file and every clip it refers to stay together, and the audition output is left as the throwaway it is. Nothing is deleted or replaced: the candidates you passed on stay where they are, and you can go back and adopt a different seed later. From then on, `ZVOX: Narrator-02` (or `--voice-name=Narrator-02`) reads with that voice. `--voice-seed`/`--voice-temperature` override the carried-over values if given. Auditioning and adopting are each their own mode and can't be combined with `--encode`/`--plan`/`--concat`.
 
 #### Cleaning up a recorded human voice
 
@@ -238,9 +247,20 @@ zaphodvox --adopt=5 --voice-name=Narrator --voices-file=voices.json refs/narrato
 
 Give it the transcript via `--voice-ref-text` so the higher-quality in-context mode is used, and audition generously (eight or so seeds) — you are shopping for one take that keeps the identity while dropping the mess. It helps to clean the source recording first with a real audio editor (trim, denoise, normalize); the model imitates what it is given, and a cleaner reference makes for cleaner candidates.
 
+If the recording is already registered in the library (with `--add-voice`, say), name it instead — the clip and its transcript come along by themselves:
+
+```bash
+zaphodvox --encoder=qwen --voice-name=Narrator --voices-file=voices.json \
+  --voice-temperature=0.6 --audition=1-8 --audition-text="..." --out-dir=refs
+
+zaphodvox --adopt=5 --voice-name=Narrator --voices-file=voices.json refs/Narrator-audition.json
+```
+
+The laundered take lands as `Narrator-05`, beside the recording it came from rather than on top of it — so the raw original is still there to make a different take from, and `Narrator` still means the human. Narrate with `Narrator-05` (rename it if you would rather; it is a plain JSON key and its clip is a plain file).
+
 **Do this once, from the original recording.** Each pass is a generation of copying, and artifacts compound: a clone of a clone of a clone drifts off the voice and starts to sound processed. One hop from real human audio is the sweet spot.
 
-The same mechanism gives you **sibling voices** — the same person with a different delivery. Because the model reads different lines with different energy, the sample sentence is the lever: audition the clone with an angry line, adopt that take as `Narrator-Angry`, and you have a matched pair. (`--voice-instruct` will *not* do this — it only applies to preset voices, and is ignored for clones.)
+The same mechanism gives you **sibling voices** — the same person with a different delivery. Because the model reads different lines with different energy, the sample sentence is the lever: audition the clone with an angry line and adopt the best take (as `Narrator-Angry-03`, say, or renamed to taste), and you have a matched pair. (`--voice-instruct` will *not* do this — it only applies to preset voices, and is ignored for clones.)
 
 ### Concatenation
 
@@ -495,11 +515,11 @@ $ cd ~/voices
 $ zaphodvox --encoder=qwen --voice-id=Ryan --basename=narrator \
     --audition=1-8 --audition-text="..." --out-dir refs
 $ zaphodvox --adopt=5 --voice-name=Narrator refs/narrator-audition.json
-    Copied refs/narrator-audition-05.wav -> Narrator.wav
+    Copied refs/narrator-audition-05.wav -> Narrator-05.wav
 $ rm -rf refs
 ```
 
-`library.json` now records `"ref_audio": "Narrator.wav"`, sitting right next to it. Note that audition clips are written to `--out-dir` (or the current directory) and never alongside the voices file, so this also keeps you from adopting a clip that lives inside one project's directory — which would break the shared library for every other project the day you moved it.
+`library.json` now records `Narrator-05` with `"ref_audio": "Narrator-05.wav"`, sitting right next to it. Note that audition clips are written to `--out-dir` (or the current directory) and never alongside the voices file, so this also keeps you from adopting a clip that lives inside one project's directory — which would break the shared library for every other project the day you moved it.
 
 ### Registering a clip you already have
 
@@ -511,7 +531,7 @@ $ zaphodvox --encoder=chatterbox --add-voice=Narrator \
     Added voice "Narrator" in voices.json
 ```
 
-The voice is built from the ordinary `--voice-*` options, so this works for presets, clones and designs on either encoder — which is also how one voices file comes to hold voices for both engines. A clip **already inside the library is referenced where it lies** (nothing is duplicated); one from anywhere else is **copied in** under the voice's name, like `--adopt` does, so the library keeps holding every clip it refers to.
+The voice is built from the ordinary `--voice-*` options, so this works for presets, clones and designs on either encoder — which is also how one voices file comes to hold voices for both engines. A clip **already inside the library is referenced where it lies** (nothing is duplicated); one from anywhere else is **copied in** under the voice's name, as `--adopt` does for a take, so the library keeps holding every clip it refers to. Unlike `--adopt`, the name is used exactly as given — there is no take to number — which is how a human recording keeps the plain `Narrator`.
 
 Note that cloning straight from a raw human recording carries the recording with it — room tone, mouth noise, an uneven level. To launder it, [audition the clone and adopt a clean take](#cleaning-up-a-recorded-human-voice) instead.
 
@@ -519,17 +539,17 @@ To keep the clips in their own subdirectory, point `--adopt` at one with `--clip
 
 ```console
 ~/voices/
-    voices.json         ["Narrator" -> "clips/Narrator.wav"]
-    clips/Narrator.wav
-    clips/Trillian.wav
+    voices.json         ["Narrator-05" -> "clips/Narrator-05.wav"]
+    clips/Narrator-05.wav
+    clips/Trillian-03.wav
 ```
 
 ```console
 $ zaphodvox --adopt=5 --voice-name=Narrator --clips-dir clips ref/narrator-audition.json
-    Copied ref/narrator-audition-05.wav -> clips/Narrator.wav
+    Copied ref/narrator-audition-05.wav -> clips/Narrator-05.wav
 ```
 
-The reference is recorded relative to the voices file (`"clips/Narrator.wav"`), so the library still moves as a unit. Set `ZAPHODVOX_CLIPS_DIR=clips` alongside `ZAPHODVOX_VOICES_FILE` and you never have to pass it.
+The reference is recorded relative to the voices file (`"clips/Narrator-05.wav"`), so the library still moves as a unit. Set `ZAPHODVOX_CLIPS_DIR=clips` alongside `ZAPHODVOX_VOICES_FILE` and you never have to pass it.
 
 Because the library sits outside the project, the voice written into the project's manifest is rewritten to remain valid from *there* (as `~/voices/narrator.wav`), so the manifest can still re-encode itself later on its own. Within a directory the paths stay relative — `--adopt` writes a clip that sits beside the voices file as a bare `narrator.wav` — so the library as a whole stays self-contained and can be moved or committed as a unit.
 

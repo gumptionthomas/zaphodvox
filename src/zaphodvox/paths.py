@@ -40,6 +40,24 @@ def expanded_path(value: str) -> Path:
     return Path(value).expanduser()
 
 
+def name_slug(voice_name: str) -> str:
+    """Reduces a voice name to something safe to build a filename from.
+
+    A voice name is free text -- `Aunt Beru`, `Zaphod (angry)` -- and both the
+    clip a voice is stored under and the files an audition of it writes are
+    named for it.
+
+    Args:
+        voice_name: The name of the voice, which may contain anything a person
+            might type.
+
+    Returns:
+        The name with everything a filename should not carry replaced by
+            dashes (`voice` if that leaves nothing at all).
+    """
+    return re.sub(r'[^A-Za-z0-9._-]+', '-', voice_name).strip('-.') or 'voice'
+
+
 def clip_filename(voice_name: str, suffix: str) -> str:
     """Builds the filename a voice's reference clip is stored under.
 
@@ -56,8 +74,7 @@ def clip_filename(voice_name: str, suffix: str) -> str:
     Returns:
         The filename for the voice's reference clip.
     """
-    slug = re.sub(r'[^A-Za-z0-9._-]+', '-', voice_name).strip('-.')
-    return f'{slug or "voice"}{suffix}'
+    return f'{name_slug(voice_name)}{suffix}'
 
 
 def resolve_ref(raw: str, base_dir: Optional[Path] = None) -> Path:

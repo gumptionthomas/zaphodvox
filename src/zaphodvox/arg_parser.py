@@ -101,7 +101,11 @@ def parse_args(args: list) -> Namespace:
         '-n',
         '--voice-name',
         default=None,
-        help='The voice name in the `voices-file` to use'
+        help=(
+            'The voice name in the `voices-file` to use: to encode with, to '
+            '--audition (its stored seed and temperature give way to the '
+            "audition's own), or to --adopt a candidate under"
+        )
     )
     parser.add_argument(
         '--clips-dir',
@@ -213,10 +217,10 @@ def parse_args(args: list) -> Namespace:
         metavar='SEEDS',
         help=(
             'Generate candidate reference clips of a preset --voice-id, a '
-            '--voice-description, or a clone --voice-ref-audio (which re-clones '
-            'it, to re-anchor a noisy recording to clean audio) for the given '
-            'seeds to audition, specified like --indexes (e.g. "5", "1-5", '
-            '"3,9,20")'
+            '--voice-description, a clone --voice-ref-audio, or an existing '
+            '--voice-name (the latter two re-clone the voice, to re-anchor a '
+            'noisy recording to clean audio) for the given seeds to audition, '
+            'specified like --indexes (e.g. "5", "1-5", "3,9,20")'
         )
     )
     parser.add_argument(

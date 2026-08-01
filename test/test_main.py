@@ -8,6 +8,7 @@ from zaphodvox import __version__
 from zaphodvox.arg_parser import parse_args
 from zaphodvox.http import CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT
 from zaphodvox.main import main, parse_voice_ids
+from zaphodvox.paths import resolve_ref
 from zaphodvox.qwen.encoder import DEFAULT_URL
 
 DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT)
@@ -802,6 +803,268 @@ class TestAudition():
         assert message in capfd.readouterr()[0]
 
 
+AUDITION_TEXT = (
+    '--audition-text=A sufficiently long sample sentence for the narrator so '
+    'the reference clip is a usable length for cloning.'
+)
+
+
+def write_voices_file(path: Path, voices: dict) -> None:
+    """Writes a real voices file, for tests that read one from disk."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({'voices': voices}), encoding='utf-8')
+
+
+class TestAuditionByName():
+    """Auditioning a voice the library already holds, by `--voice-name`.
+
+    These use real files rather than the `builtins.open` mock: the voices file
+    has to be read back, and a clone's reference clip has to exist for
+    `validate_voice()`.
+    """
+
+    def test_audition_by_voice_name(self, mock_qwen, tmp_path, monkeypatch):
+        # Setup: a library clone voice, its clip stored beside the voices file
+        # the way `--adopt` leaves it -- and the command run from somewhere
+        # else entirely, so a `ref_audio` resolved against the CWD would miss.
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'lib' / 'clips').mkdir(parents=True)
+        (tmp_path / 'lib' / 'clips' / 'narrator.wav').write_text('ref audio')
+        write_voices_file(tmp_path / 'lib' / 'voices.json', {'narrator': {
+            'encoder': 'qwen',
+            'ref_audio': 'clips/narrator.wav',
+            'ref_text': 'The narrator reads a sample line.',
+        }})
+        sys_args = [
+            '--encoder=qwen',
+            '--voice-name=narrator',
+            '--voices-file=lib/voices.json',
+            '--audition=0-1',
+            AUDITION_TEXT,
+        ]
+
+        # Run
+        main(sys_args)
+
+        # Verify: two re-clones of the library's own clip, uploaded from where
+        # the voices file says it is, carrying its transcript (so ICL mode).
+        assert mock_qwen.post.call_count == 2
+        for c in mock_qwen.post.call_args_list:
+            assert c.args[0].endswith('/v1/audio/speech/upload')
+            assert c.kwargs['data']['ref_text'] == (
+                'The narrator reads a sample line.'
+            )
+            assert Path(c.kwargs['files']['voice_file'].name) == (
+                Path('lib/clips/narrator.wav')
+            )
+        # The candidates are named for the voice, not for "None".
+        for seed in range(2):
+            mock_qwen.write_bytes.assert_any_call(
+                Path(f'narrator-audition-0{seed}.wav'), b'audio'
+            )
+        assert (tmp_path / 'narrator-audition.json').is_file()
+
+    def test_audition_index_ref_audio_is_rebased(
+        self, mock_qwen, tmp_path, monkeypatch
+    ):
+        # The index records the voice each candidate came from, and a library
+        # clone's `ref_audio` is anchored to the voices file -- which is not
+        # where the index lands. Written as-is it would resolve against the
+        # output directory and point at nothing.
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'lib' / 'clips').mkdir(parents=True)
+        (tmp_path / 'lib' / 'clips' / 'narrator.wav').write_text('ref audio')
+        write_voices_file(tmp_path / 'lib' / 'voices.json', {'narrator': {
+            'encoder': 'qwen',
+            'ref_audio': 'clips/narrator.wav',
+            'ref_text': 'The narrator reads a sample line.',
+        }})
+
+        # Run
+        main([
+            '--encoder=qwen', '--voice-name=narrator',
+            '--voices-file=lib/voices.json', '--out-dir=out',
+            '--audition=0', AUDITION_TEXT,
+        ])
+
+        # Verify: the recorded path still finds the clip from the index's own
+        # directory.
+        index = json.loads(
+            (tmp_path / 'out' / 'narrator-audition.json').read_text(
+                encoding='utf-8'
+            )
+        )
+        ref_audio = index[0]['voice']['ref_audio']
+        assert resolve_ref(ref_audio, tmp_path / 'out').is_file()
+        # ...and the voice the encode actually used was left alone.
+        assert mock_qwen.post.call_args.kwargs['files']['voice_file'].name == (
+            str(Path('lib/clips/narrator.wav'))
+        )
+
+    def test_audition_by_voice_name_slugs_the_basename(
+        self, mock_qwen, tmp_path, monkeypatch
+    ):
+        # A voice name is free text, but a filename is not.
+        monkeypatch.chdir(tmp_path)
+        write_voices_file(
+            tmp_path / 'voices.json',
+            {'Aunt Beru': {'encoder': 'qwen', 'voice_id': 'Serena'}}
+        )
+
+        # Run
+        main([
+            '--encoder=qwen', '--voice-name=Aunt Beru',
+            '--voices-file=voices.json', '--audition=0', AUDITION_TEXT,
+        ])
+
+        # Verify
+        mock_qwen.write_bytes.assert_called_once_with(
+            Path('Aunt-Beru-audition-00.wav'), b'audio'
+        )
+
+    def test_audition_by_voice_name_sweeps_past_the_stored_seed(
+        self, mock_qwen, tmp_path, monkeypatch
+    ):
+        # The stored seed pins the voice for a book; an audition is precisely a
+        # search for a better one, so the sweep overrides it.
+        monkeypatch.chdir(tmp_path)
+        write_voices_file(
+            tmp_path / 'voices.json',
+            {'narrator': {
+                'encoder': 'qwen', 'voice_id': 'Ryan', 'seed': 42
+            }}
+        )
+
+        # Run
+        main([
+            '--encoder=qwen', '--voice-name=narrator',
+            '--voices-file=voices.json', '--audition=0-1', AUDITION_TEXT,
+        ])
+
+        # Verify
+        seeds = [c.kwargs['json']['seed'] for c in mock_qwen.post.call_args_list]
+        assert seeds == [0, 1]
+
+    def test_audition_by_voice_name_drops_the_stored_temperature(
+        self, mock_qwen, tmp_path, monkeypatch
+    ):
+        # Same reasoning as the seed: the audition's own dials apply, and here
+        # none was given, so the server's default stands.
+        monkeypatch.chdir(tmp_path)
+        write_voices_file(
+            tmp_path / 'voices.json',
+            {'narrator': {
+                'encoder': 'qwen', 'voice_id': 'Ryan', 'temperature': 0.9
+            }}
+        )
+
+        # Run
+        main([
+            '--encoder=qwen', '--voice-name=narrator',
+            '--voices-file=voices.json', '--audition=0', AUDITION_TEXT,
+        ])
+
+        # Verify
+        assert 'temperature' not in mock_qwen.post.call_args.kwargs['json']
+
+    def test_audition_by_voice_name_takes_the_given_temperature(
+        self, mock_qwen, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        write_voices_file(
+            tmp_path / 'voices.json',
+            {'narrator': {
+                'encoder': 'qwen', 'voice_id': 'Ryan', 'temperature': 0.9
+            }}
+        )
+
+        # Run
+        main([
+            '--encoder=qwen', '--voice-name=narrator',
+            '--voices-file=voices.json', '--voice-temperature=0.6',
+            '--audition=0', AUDITION_TEXT,
+        ])
+
+        # Verify
+        assert mock_qwen.post.call_args.kwargs['json']['temperature'] == 0.6
+
+    def test_audition_hint_names_the_voice_adopting_would_create(
+        self, capfd, mock_qwen, tmp_path, monkeypatch
+    ):
+        # Adopting appends the seed, so the name to put in a `ZVOX:` tag is not
+        # the one that was auditioned. Say it, rather than let it be a surprise.
+        monkeypatch.chdir(tmp_path)
+        write_voices_file(
+            tmp_path / 'voices.json',
+            {'narrator': {'encoder': 'qwen', 'voice_id': 'Ryan'}}
+        )
+
+        # Run
+        main([
+            '--encoder=qwen', '--voice-name=narrator',
+            '--voices-file=voices.json', '--audition=1', AUDITION_TEXT,
+        ])
+
+        # Verify
+        out = capfd.readouterr()[0]
+        assert '"narrator-01"' in out
+        assert '--adopt 1 --voice-name "narrator"' in out
+
+    def test_audition_rejects_a_voice_name_with_another_source(
+        self, capfd, mock_qwen
+    ):
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--voice-name=narrator',
+                '--voices-file=voices.json', '--voice-id=Ryan',
+                '--audition=2', '--audition-text=hello',
+            ])
+        assert se.value.code == 1
+        assert 'exactly one' in capfd.readouterr()[0]
+
+    def test_audition_unknown_voice_name(
+        self, capfd, mock_qwen, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        write_voices_file(
+            tmp_path / 'voices.json',
+            {'narrator': {'encoder': 'qwen', 'voice_id': 'Ryan'}}
+        )
+
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--voice-name=nope',
+                '--voices-file=voices.json', '--audition=2', AUDITION_TEXT,
+            ])
+
+        assert se.value.code == 1
+        out = capfd.readouterr()[0]
+        assert 'No voice named "nope"' in out
+        assert 'voices.json' in out
+
+    def test_audition_voice_name_from_another_encoder(
+        self, capfd, mock_qwen, tmp_path, monkeypatch
+    ):
+        # One library holds both engines' voices, so the name alone can name a
+        # voice this encoder cannot speak. Say so, rather than fail deep in the
+        # encoder with "Not a QwenVoice".
+        monkeypatch.chdir(tmp_path)
+        write_voices_file(
+            tmp_path / 'voices.json',
+            {'narrator': {'encoder': 'chatterbox', 'voice_id': 'Ryan.wav'}}
+        )
+
+        with pytest.raises(SystemExit) as se:
+            main([
+                '--encoder=qwen', '--voice-name=narrator',
+                '--voices-file=voices.json', '--audition=2', AUDITION_TEXT,
+            ])
+
+        assert se.value.code == 1
+        out = capfd.readouterr()[0]
+        assert 'narrator' in out and 'chatterbox' in out and 'qwen' in out
+
+
 class TestAdopt():
     def test_adopt_creates_voices_file(self, mock_builtins_open, monkeypatch):
         # Setup: adopt candidate seed 1; the voices file does not exist yet.
@@ -826,24 +1089,25 @@ class TestAdopt():
         # Run
         main(sys_args)
 
-        # Verify: the clip is copied in under the voice's own name, and the
-        # entry references it rather than the audition candidate in refs/.
+        # Verify: the clip is copied in under the adopted voice's name -- the
+        # --voice-name with the take's seed appended -- and the entry references
+        # it rather than the audition candidate in refs/.
         # `open` gets native separators (a backslash on Windows); only the
         # serialized `ref_audio` is POSIX.
         mock_builtins_open.assert_any_call(
             str(Path('refs/ryan-audition-01.wav')), 'rb'
         )
-        mock_builtins_open.assert_any_call('Narrator.wav', 'wb')
+        mock_builtins_open.assert_any_call('Narrator-01.wav', 'wb')
         mock_builtins_open.assert_any_call('voices.json', 'w', **WRITE_KW)
         written = json.loads(mock_write.call_args[0][0])
         assert written == {
             'voices': {
-                'Narrator': {
+                'Narrator-01': {
                     # The voice records which encoder it is for, so one voices
                     # file can hold voices for more than one engine.
                     'encoder': 'qwen',
                     'language': 'English',
-                    'ref_audio': 'Narrator.wav',
+                    'ref_audio': 'Narrator-01.wav',
                     'ref_text': 'Sample reference line for the narrator voice.',
                     'seed': 1,
                     'temperature': 0.6,
@@ -874,8 +1138,10 @@ class TestAdopt():
 
         # Verify: both the old and new voices are present.
         written = json.loads(mock_write.call_args[0][0])
-        assert set(written['voices']) == {'Ford', 'Narrator'}
-        assert written['voices']['Narrator']['ref_audio'] == 'Narrator.wav'
+        assert set(written['voices']) == {'Ford', 'Narrator-00'}
+        assert written['voices']['Narrator-00']['ref_audio'] == (
+            'Narrator-00.wav'
+        )
 
     def test_adopt_missing_candidate(self, capfd, mock_builtins_open):
         # Setup: the index names a clip that is not on disk.
