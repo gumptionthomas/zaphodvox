@@ -562,7 +562,7 @@ class TestAdoptFromAVoiceSweep():
         refs.mkdir(parents=True)
         index = []
         for name in ('Serena', 'Dylan'):
-            filename = f'shop-audition-{name.split(".")[0]}-01.wav'
+            filename = f'shop-audition-{name}-01.wav'
             (refs / filename).write_bytes(f'RIFF{name}'.encode())
             index.append({
                 'seed': 1,

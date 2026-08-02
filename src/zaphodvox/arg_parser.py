@@ -8,7 +8,7 @@ from zaphodvox.http import (
     request_timeout,
 )
 from zaphodvox.paths import expanded_path
-from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder  # noqa: F401
+from zaphodvox.qwen.encoder import DEFAULT_URL, QwenEncoder
 
 
 def timeout_seconds(value: str) -> float:
@@ -79,8 +79,10 @@ def parse_args(args: list) -> Namespace:
         '-e',
         '--encoder-name',
         choices=[e.name for e in Encoder.__subclasses__()],
-        default='qwen',
-        help='The name of the encoder to use (default: qwen)'
+        # Not the string: the import above exists to register the encoder, and
+        # naming it here keeps the default and the choices from drifting apart.
+        default=QwenEncoder.name,
+        help=f'The name of the encoder to use (default: {QwenEncoder.name})'
     )
     parser.add_argument(
         '-f',

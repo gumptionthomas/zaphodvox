@@ -42,6 +42,19 @@ class TestParseVoice():
 
         assert parse_voice(voice) is voice
 
+    def test_the_offending_field_is_named(self):
+        # A voices file is meant to be hand-edited, so a typo'd key is the
+        # usual way to get here. The mapping is echoed either way, which shows
+        # the reader every key but not which one is wrong -- so the message has
+        # to carry what was actually wrong with it. (The wording after the
+        # colon is pydantic's; if it changes, this assertion is where to look.)
+        with pytest.raises(ValueError) as e:
+            parse_voice(
+                {'encoder': 'qwen', 'voice_id': 'Ryan', 'temprature': 0.6}
+            )
+
+        assert 'temprature: Extra inputs are not permitted' in str(e.value)
+
     def test_a_voice_for_no_encoder_is_reported(self):
         with pytest.raises(ValueError) as e:
             parse_voice({'voice_id': 'Ryan', 'nonsense': True})

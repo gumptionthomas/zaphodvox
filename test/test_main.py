@@ -451,11 +451,16 @@ class TestMain():
         with pytest.raises(SystemExit) as se:
             main(preparsed_args=args)
 
-        # Verify
-        mock_builtins_open.assert_not_called()
+        # Verify: the input is read before the encoder is resolved (the modes
+        # that need no encoder run first, and they need the text), but nothing
+        # is written and nothing is synthesized.
         assert se.value.code == 1
         out, _ = capfd.readouterr()
         assert 'Encoder "NotARealEncoder" not found' in out
+        assert all(
+            c.args[1] == 'r' for c in mock_builtins_open.call_args_list
+            if len(c.args) > 1
+        )
 
     def test_clean(self, mock_builtins_open, text_to_encode):
         # Setup
@@ -1194,6 +1199,24 @@ class TestProof():
         report = json.loads((tmp_path / 'book-proof.json').read_text())
         assert report['source_file'] == 'book.txt'
         assert any(f['text'] == 'jumpd' for f in report['findings'])
+
+    def test_proof_does_not_build_a_voice(self, tmp_path, monkeypatch):
+        # Proofing is read-only and never synthesizes, so it has no business
+        # validating voice arguments. It started doing exactly that the moment
+        # --encoder-name gained a default: an encoder (and its voice) was built
+        # before any of the modes that do not need one had run.
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text('The quick brown fox jumped.\n')
+
+        # Run: two voice sources at once, which is not a voice any encoder
+        # would accept -- and which proofing never looks at.
+        main([
+            '--proof', '--voice-id=Ryan', '--voice-ref-audio=nope.wav',
+            'book.txt',
+        ])
+
+        # Verify
+        assert (tmp_path / 'book-proof.json').is_file()
 
     def test_proof_honors_dict(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)

@@ -72,8 +72,21 @@ def main(
             # already been synthesized. `--adopt` creates its clips directory;
             # this is the same courtesy.
             args.out_dir.mkdir(parents=True, exist_ok=True)
-        args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
+
+        # The modes that never synthesize come first, before an encoder is
+        # built. They have no use for one, and constructing its voice would
+        # make them fail on `--voice-*` arguments they never read -- a
+        # proofread refusing to run because of a voice is nonsense.
+        if args.adopt is not None:
+            adopt(args, text, console)
+            return
+
+        if args.proof:
+            proof(args, text, console)
+            return
+
+        args.encoder, args.voice = encoder_voice(args)
 
         if args.list_voices:
             list_voices(args, console)
@@ -81,14 +94,6 @@ def main(
 
         if args.add_voice:
             add_voice(args, console)
-            return
-
-        if args.adopt is not None:
-            adopt(args, text, console)
-            return
-
-        if args.proof:
-            proof(args, text, console)
             return
 
         args.named_voices = read_voices(args.voices_file, manifest)
