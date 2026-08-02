@@ -17,7 +17,7 @@ class TestArgParser():
         assert args.inputfile == Path('test.txt')
         assert args.version is False
         assert args.out_dir is None
-        assert args.encoder_name is None
+        assert args.encoder_name == 'qwen'
         assert args.voices_file is None
         assert args.voice_name is None
         assert args.voice_id is None

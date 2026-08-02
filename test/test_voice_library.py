@@ -6,6 +6,8 @@ import pytest
 
 from zaphodvox.main import main
 
+from fake_encoder import FakeEncoder  # noqa: F401
+
 
 class TestVoiceLibrary():
     """Drives the CLI against a voice library that lives outside the project.
@@ -457,10 +459,9 @@ class TestAddVoice():
     ):
         # Run
         main([
-            '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+            '--encoder-name', 'fake', '--add-voice', 'Narrator',
             '-f', 'voices.json', '--clips-dir', 'clips',
-            '--voice-ref-audio', 'clips/narrator.wav',
-            '--voice-exaggeration', '0.6', '--voice-seed', '42',
+            '--voice-ref-audio', 'clips/narrator.wav', '--voice-seed', '42',
         ])
 
         # Verify: referenced where it lies -- copying it to `clips/Narrator.wav`
@@ -469,9 +470,8 @@ class TestAddVoice():
             (library / 'voices.json').read_text(encoding='utf-8')
         )
         assert voices['voices']['Narrator'] == {
-            'encoder': 'chatterbox',
+            'encoder': 'fake',
             'ref_audio': 'clips/narrator.wav',
-            'exaggeration': 0.6,
             'seed': 42,
         }
         # Compare the directory's actual entries: `Path.exists()` answers for
@@ -491,7 +491,7 @@ class TestAddVoice():
 
         # Run
         main([
-            '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+            '--encoder-name', 'fake', '--add-voice', 'Narrator',
             '-f', 'voices.json', '--clips-dir', 'clips',
             '--voice-ref-audio', str(outside / 'recording.wav'),
         ])
@@ -504,9 +504,11 @@ class TestAddVoice():
         assert voices['voices']['Narrator']['ref_audio'] == 'clips/Narrator.wav'
 
     def test_voices_for_both_encoders_in_one_file(self, library, capfd):
-        # Run: the A/B setup -- the same library, two engines.
+        # Run: the same library, two engines. One backend ships today, so the
+        # second is the test-only fake -- the seam is what is under test here,
+        # not the engine.
         main([
-            '--encoder-name', 'chatterbox', '--add-voice', 'NarratorCB',
+            '--encoder-name', 'fake', '--add-voice', 'NarratorFake',
             '-f', 'voices.json', '--voice-ref-audio', 'clips/narrator.wav',
         ])
         main([
@@ -519,14 +521,17 @@ class TestAddVoice():
         voices = json.loads(
             (library / 'voices.json').read_text(encoding='utf-8')
         )['voices']
-        assert voices['NarratorCB']['encoder'] == 'chatterbox'
+        assert voices['NarratorFake']['encoder'] == 'fake'
         assert voices['Narrator']['encoder'] == 'qwen'
+        # Each is read back as its own subclass, keeping the settings the other
+        # engine has no idea about.
         assert voices['Narrator']['ref_text'] == 'Well, hello there.'
+        assert 'ref_text' not in voices['NarratorFake']
 
     def test_a_missing_clip_is_reported(self, library, capfd):
         with pytest.raises(SystemExit) as se:
             main([
-                '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+                '--encoder-name', 'fake', '--add-voice', 'Narrator',
                 '-f', 'voices.json',
                 '--voice-ref-audio', 'clips/nope.wav',
             ])
@@ -537,7 +542,7 @@ class TestAddVoice():
     def test_requires_a_voice(self, library, capfd):
         with pytest.raises(SystemExit) as se:
             main([
-                '--encoder-name', 'chatterbox', '--add-voice', 'Narrator',
+                '--encoder-name', 'fake', '--add-voice', 'Narrator',
                 '-f', 'voices.json',
             ])
 
@@ -556,14 +561,14 @@ class TestAdoptFromAVoiceSweep():
         refs = library / 'refs'
         refs.mkdir(parents=True)
         index = []
-        for name in ('Alice.wav', 'Miles.wav'):
-            filename = f'shop-audition-{name.split(".")[0]}-01.wav'
+        for name in ('Serena', 'Dylan'):
+            filename = f'shop-audition-{name}-01.wav'
             (refs / filename).write_bytes(f'RIFF{name}'.encode())
             index.append({
                 'seed': 1,
                 'filename': filename,
                 'text': 'A sample sentence.',
-                'voice': {'encoder': 'chatterbox', 'voice_id': name},
+                'voice': {'encoder': 'qwen', 'voice_id': name},
             })
         (refs / 'shop-audition.json').write_text(
             json.dumps(index), encoding='utf-8'
@@ -586,21 +591,21 @@ class TestAdoptFromAVoiceSweep():
     def test_voice_id_chooses_the_candidate(self, sweep, capfd):
         # Run
         main([
-            '--adopt', '1', '-n', 'Narrator', '--voice-id', 'Miles.wav',
+            '--adopt', '1', '-n', 'Narrator', '--voice-id', 'Dylan',
             '-f', 'voices.json', '--clips-dir', 'clips',
             'refs/shop-audition.json',
         ])
 
         # Verify: the chosen voice's clip, not the other one's.
         assert (sweep / 'clips' / 'Narrator-01.wav').read_bytes() == (
-            b'RIFFMiles.wav'
+            b'RIFFDylan'
         )
         voices = json.loads(
             (sweep / 'voices.json').read_text(encoding='utf-8')
         )
         narrator = voices['voices']['Narrator-01']
         assert narrator['ref_audio'] == 'clips/Narrator-01.wav'
-        assert narrator['encoder'] == 'chatterbox'
+        assert narrator['encoder'] == 'qwen'
 
 
 class TestAuditionByNameRoundTrip():

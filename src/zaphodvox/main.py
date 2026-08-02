@@ -72,8 +72,21 @@ def main(
             # already been synthesized. `--adopt` creates its clips directory;
             # this is the same courtesy.
             args.out_dir.mkdir(parents=True, exist_ok=True)
-        args.encoder, args.voice = encoder_voice(args)
         text, manifest = read_text_manifest(args.inputfile)
+
+        # The modes that never synthesize come first, before an encoder is
+        # built. They have no use for one, and constructing its voice would
+        # make them fail on `--voice-*` arguments they never read -- a
+        # proofread refusing to run because of a voice is nonsense.
+        if args.adopt is not None:
+            adopt(args, text, console)
+            return
+
+        if args.proof:
+            proof(args, text, console)
+            return
+
+        args.encoder, args.voice = encoder_voice(args)
 
         if args.list_voices:
             list_voices(args, console)
@@ -81,14 +94,6 @@ def main(
 
         if args.add_voice:
             add_voice(args, console)
-            return
-
-        if args.adopt is not None:
-            adopt(args, text, console)
-            return
-
-        if args.proof:
-            proof(args, text, console)
             return
 
         args.named_voices = read_voices(args.voices_file, manifest)
@@ -174,7 +179,6 @@ def validate(args: Namespace) -> None:
         ValueError: If there is a problem with the specified arguments.
     """
     inputfile: Optional[Path] = args.inputfile
-    encoder_name: Optional[str] = args.encoder_name
     encode: bool = args.encode
     audition: Optional[str] = args.audition
     add_word = args.add_word
@@ -184,8 +188,6 @@ def validate(args: Namespace) -> None:
             raise ValueError('--add-word requires --dict.')
         return
     if args.list_voices:
-        if not encoder_name:
-            raise ValueError('--list-voices requires --encoder-name.')
         return
     if args.add_voice:
         if any([args.clean, args.plan, encode, args.concat, audition,
@@ -193,15 +195,11 @@ def validate(args: Namespace) -> None:
             raise ValueError(
                 '--add-voice cannot be combined with other actions.'
             )
-        if not encoder_name:
-            raise ValueError('--add-voice requires --encoder-name.')
         if not args.voices_file:
             raise ValueError('--add-voice requires --voices-file.')
         return
     if not (inputfile or audition):
         raise ValueError('No input file specified.')
-    if (encode or audition) and not encoder_name:
-        raise ValueError('No encoder specified.')
     if args.proof and any(
         [args.clean, args.plan, encode, args.concat, audition,
          args.adopt is not None]
@@ -242,7 +240,7 @@ def validate(args: Namespace) -> None:
 
 def encoder_voice(
     args: Namespace
-) -> tuple[Optional[Encoder], Optional[Voice]]:
+) -> tuple[Encoder, Optional[Voice]]:
     """Creates the encoder and voice (if configured) from the specified
         command-line arguments.
 
@@ -250,16 +248,19 @@ def encoder_voice(
         args: The parsed command-line arguments.
 
     Returns:
-        A tuple containing the encoder and voice from the specified
-            command-line arguments.
+        A tuple containing the encoder and the voice (if any) from the
+            specified command-line arguments.
+
+    Raises:
+        ValueError: If no encoder was specified.
     """
     encoder_name: str = args.encoder_name
 
-    encoder: Optional[Encoder] = None
-    voice: Optional[Voice] = None
-    if encoder_name:
-        encoder, voice = encoder_class(encoder_name).from_args(args)
-    return encoder, voice
+    # The CLI always supplies one (`--encoder-name` defaults to qwen), but
+    # `main(preparsed_args=...)` takes whatever Namespace it is handed.
+    if not encoder_name:
+        raise ValueError('No encoder specified.')
+    return encoder_class(encoder_name).from_args(args)
 
 
 def encoder_class(name: str) -> type[Encoder]:
