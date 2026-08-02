@@ -11,6 +11,8 @@ from zaphodvox.main import main, parse_voice_ids
 from zaphodvox.paths import resolve_ref
 from zaphodvox.qwen.encoder import DEFAULT_URL
 
+from fake_encoder import FakeEncoder  # noqa: F401
+
 DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT)
 """The `(connect, read)` timeout every request carries unless told otherwise."""
 
@@ -410,38 +412,34 @@ class TestMain():
         out, _ = capfd.readouterr()
         assert 'No such file' in out
 
-    def test_no_encoder(self, capfd, mock_builtins_open):
-        # Setup
-        sys_args = ['--encode', 'test.txt']
-        args = parse_args(sys_args)
-
-        # Run
-        with pytest.raises(SystemExit) as se:
-            main(preparsed_args=args)
-
-        # Verify
-        mock_builtins_open.assert_not_called()
-        assert se.value.code == 1
-        out, _ = capfd.readouterr()
-        assert 'No encoder specified' in out
-
-    def test_manifest_no_encoder(
-        self, capfd, manifest_json_data, mock_builtins_open
+    def test_encoder_defaults_to_qwen(
+        self, mock_qwen, mock_builtins_open, text_to_encode
     ):
-        # Setup
-        mock_builtins_open.read_data = manifest_json_data
-        sys_args = ['--encode', 'test-manifest.json']
-        args = parse_args(sys_args)
+        # Qwen is the only backend, so spelling it out on every command was
+        # ceremony. No --encoder here.
+        main(['--voice-id=Ryan', '--encode', 'test.txt'])
+
+        # Verify: it synthesized against the Qwen server.
+        assert mock_qwen.post.call_args.args[0].startswith(DEFAULT_URL)
+        assert mock_qwen.post.call_args.kwargs['json']['input'] == (
+            text_to_encode
+        )
+
+    def test_no_encoder_in_a_hand_built_namespace(
+        self, capfd, mock_builtins_open
+    ):
+        # The CLI always has an encoder now, but `main(preparsed_args=...)` is
+        # reachable from library code with whatever Namespace it likes.
+        args = parse_args(['--encode', 'test.txt'])
+        args.encoder_name = None
 
         # Run
         with pytest.raises(SystemExit) as se:
             main(preparsed_args=args)
 
         # Verify
-        mock_builtins_open.assert_not_called()
         assert se.value.code == 1
-        out, _ = capfd.readouterr()
-        assert 'No encoder specified' in out
+        assert 'No encoder specified' in capfd.readouterr()[0]
 
     def test_invalid_encoder(self, capfd, mock_builtins_open):
         # Setup
@@ -1045,13 +1043,13 @@ class TestAuditionByName():
     def test_audition_voice_name_from_another_encoder(
         self, capfd, mock_qwen, tmp_path, monkeypatch
     ):
-        # One library holds both engines' voices, so the name alone can name a
-        # voice this encoder cannot speak. Say so, rather than fail deep in the
-        # encoder with "Not a QwenVoice".
+        # One library can hold more than one engine's voices, so the name alone
+        # can name a voice this encoder cannot speak. Say so, rather than fail
+        # deep in the encoder with "Not a QwenVoice".
         monkeypatch.chdir(tmp_path)
         write_voices_file(
             tmp_path / 'voices.json',
-            {'narrator': {'encoder': 'chatterbox', 'voice_id': 'Ryan.wav'}}
+            {'narrator': {'encoder': 'fake', 'voice_id': 'Fake'}}
         )
 
         with pytest.raises(SystemExit) as se:
@@ -1062,7 +1060,7 @@ class TestAuditionByName():
 
         assert se.value.code == 1
         out = capfd.readouterr()[0]
-        assert 'narrator' in out and 'chatterbox' in out and 'qwen' in out
+        assert 'narrator' in out and 'fake' in out and 'qwen' in out
 
 
 class TestAdopt():

@@ -37,19 +37,9 @@ $ pip install -e .
 
 > "He didn't know why he had become President of the Galaxy, except that it seemed a fun thing to be."
 
-`zaphodvox` does no synthesis itself. It talks to a locally-hosted TTS server, so you must have one running before encoding. Two engines are supported, selected with `--encoder`:
+`zaphodvox` does no synthesis itself. It talks to a locally-hosted TTS server, so you must have one running before encoding. One engine is supported today — Qwen3-TTS, selected with `--encoder=qwen`, which is also the default — served by [`eddie-tts`](https://github.com/gumptionthomas/eddie-tts) at `http://127.0.0.1:4123`. It is local, needs no API key, and wants an NVIDIA GPU.
 
-| | `--encoder=qwen` | `--encoder=chatterbox` |
-|---|---|---|
-| Server | [`eddie-tts`](https://github.com/gumptionthomas/eddie-tts) (Qwen3-TTS) | [`Chatterbox-TTS-Server`](https://github.com/devnen/Chatterbox-TTS-Server) |
-| Default URL | `http://127.0.0.1:4123` | `http://127.0.0.1:8004` |
-| Preset speakers | yes (`--voice-id=Ryan`) | yes (`--voice-id=Ryan.wav`) |
-| Voice cloning | yes, with optional in-context (ICL) mode | yes (zero-shot only) |
-| Voice design (from a description) | yes | **no** |
-| Steering the delivery | `--voice-instruct` (natural language) | `--voice-exaggeration`, `--voice-cfg-weight` (numeric) |
-| `--voice-seed` / `--voice-temperature` | yes | yes |
-
-Both are local, need no API key, and want an NVIDIA GPU. They each hold a model in VRAM, so **run one at a time** unless you have room for both.
+A Chatterbox backend shipped in 2.3.0 and was removed again: the model routinely keeps generating after it has finished speaking the text, leaving a few hundred milliseconds of invented sound at the end of a clip, and that is architectural rather than a setting. `zaphodvox` keeps the multi-encoder seam it left behind — `--encoder-name`, the `encoder` tag on every serialized voice, one voices file able to hold more than one engine's voices — so a second backend can be added without disturbing anything. See `CLAUDE.md` for the details.
 
 ### Qwen3-TTS Server
 
@@ -64,22 +54,6 @@ The server needs to expose three endpoints:
 The reference implementation is [**`eddie-tts`**](https://github.com/gumptionthomas/eddie-tts) — a Windows-friendly fork of [`cornball-ai/qwen3-tts-api`](https://github.com/cornball-ai/qwen3-tts-api), which in turn serves the open-weight [QwenLM/Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) models. Follow Eddie's README to install and run it. **The `--voice-seed` and `--voice-temperature` options require Eddie** — upstream `qwen3-tts-api` implements neither `seed` nor `temperature`, so on that server those flags are silently ignored. The models want an NVIDIA GPU, so a CUDA-capable card is effectively a prerequisite for the server (not for `zaphodvox`). No API keys or authentication are involved, as the server is expected to be local and trusted.
 
 By default `zaphodvox` talks to the server at `http://127.0.0.1:4123`. Override the base URL with the `--qwen-url` argument or the `ZAPHODVOX_QWEN_URL` environment variable.
-
-### Chatterbox Server
-
-`--encoder=chatterbox` talks to a [Chatterbox TTS server](https://github.com/devnen/Chatterbox-TTS-Server) (MIT), serving Resemble AI's Chatterbox model — a strong zero-shot cloner. The stock server is enough; no fork is needed. `zaphodvox` uses its native `POST /tts` (not the OpenAI-compatible endpoint, which insists on a meaningless `model` field and re-chunks text that has already been fragmented), and `POST /upload_reference` to send a clone's reference clip — once per clip, not once per fragment.
-
-```bash
-zaphodvox --encoder=chatterbox --voice-id=Ryan.wav --encode gone-bananas.txt
-```
-
-Chatterbox differs from Qwen in ways worth knowing, and `zaphodvox` **fails with a clear error rather than quietly ignoring a setting it cannot honor**:
-
-- **No voice design.** `--voice-description` is a Qwen feature. (You can still design a voice with Qwen, audition it, adopt the best take as a clone — and then hand that clip to Chatterbox.)
-- **No in-context cloning**, so no `--voice-ref-text`.
-- **`--voice-instruct` does not apply.** Delivery is steered numerically instead: `--voice-exaggeration` (how expressive, 0.25–2.0 — unlike `--voice-temperature`, this really is an expressiveness dial), `--voice-cfg-weight` (how closely it follows the reference, at the cost of expressiveness), and `--voice-speed` (pace).
-
-Override the base URL with `--chatterbox-url` or the `ZAPHODVOX_CHATTERBOX_URL` environment variable. Note that Chatterbox embeds Resemble's imperceptible [PerTh](https://github.com/resemble-ai/perth) watermark in everything it generates — a presence flag, carrying no identifying data.
 
 ## Usage
 
@@ -101,7 +75,7 @@ between lines. Ideally, these parts of the sentence would be on the same line.
 ```
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --encode gone-bananas.txt
+zaphodvox --voice-id=Ryan --encode gone-bananas.txt
 ```
 
 Running the above command will encode the text file with the locally-hosted [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) server using the `Ryan` preset speaker. This will result in the following fragment audio files being created in the current directory (one file for each line of text):
@@ -122,31 +96,31 @@ A Qwen voice is one of: a built-in **preset speaker**, a zero-shot **clone** of 
 To use a **preset speaker**, pass its name to `--voice-id`. The available speakers are `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, and `Sohee`. You can optionally steer the delivery with `--voice-instruct` and set the language with `--voice-language`:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Eric --voice-instruct="depressed, morose" --encode gone-bananas.txt
+zaphodvox --voice-id=Eric --voice-instruct="depressed, morose" --encode gone-bananas.txt
 ```
 
 The default language is `English`. Other supported values are `Chinese`, `Japanese`, `Korean`, `German`, `French`, `Russian`, `Portuguese`, `Spanish`, and `Italian`:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Dylan --voice-language=French --encode gone-bananas.txt
+zaphodvox --voice-id=Dylan --voice-language=French --encode gone-bananas.txt
 ```
 
 To **clone a voice**, pass a reference audio file to `--voice-ref-audio` instead of a `--voice-id`:
 
 ```bash
-zaphodvox --encoder=qwen --voice-ref-audio=trillian-sample.wav --encode gone-bananas.txt
+zaphodvox --voice-ref-audio=trillian-sample.wav --encode gone-bananas.txt
 ```
 
 Without a transcript, this performs a true zero-shot clone. If you also provide the transcript of the reference audio via `--voice-ref-text`, the server uses the higher-quality in-context (ICL) clone mode:
 
 ```bash
-zaphodvox --encoder=qwen --voice-ref-audio=trillian-sample.wav --voice-ref-text="Well, hello there." --encode gone-bananas.txt
+zaphodvox --voice-ref-audio=trillian-sample.wav --voice-ref-text="Well, hello there." --encode gone-bananas.txt
 ```
 
 To **design a voice** from a natural-language description, pass it to `--voice-description`:
 
 ```bash
-zaphodvox --encoder=qwen --voice-description="a warm elderly woman, gentle and unhurried" --encode gone-bananas.txt
+zaphodvox --voice-description="a warm elderly woman, gentle and unhurried" --encode gone-bananas.txt
 ```
 
 Note that a designed voice is the least consistent choice for a whole book — the model re-derives the voice from the description on each call. For steady narration, design a voice, audition it, and **adopt the best take as a clone** (see [Auditioning a reference voice](#auditioning-a-reference-voice) below); the clone then anchors every chunk.
@@ -154,13 +128,13 @@ Note that a designed voice is the least consistent choice for a whole book — t
 The audio output format is `wav` by default. Use `--qwen-audio-format` to select `wav` or `mp3`:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --qwen-audio-format=mp3 --encode gone-bananas.txt
+zaphodvox --voice-id=Ryan --qwen-audio-format=mp3 --encode gone-bananas.txt
 ```
 
 By default each fragment is synthesized non-deterministically, so a voice can drift in timbre and pacing from chunk to chunk. Pin a fixed RNG seed with `--voice-seed` to keep a voice consistent across every fragment (and across re-encodes). Combining it with a larger `--max-chars` gives the steadiest results:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --voice-seed=42 --max-chars=500 --encode gone-bananas.txt
+zaphodvox --voice-id=Ryan --voice-seed=42 --max-chars=500 --encode gone-bananas.txt
 ```
 
 The seed is stored with the voice in the manifest, so re-encoding a fragment reproduces the same audio.
@@ -174,7 +148,7 @@ A seed makes a given fragment *reproducible*, but the model still reads differen
 For the most consistent narration, clone every chunk from a single fixed reference clip rather than relying on a preset or a design. The `--audition` argument helps you find a good reference: it synthesizes a candidate clip of a preset (`--voice-id`), designed (`--voice-description`), cloned (`--voice-ref-audio`), or already-named (`--voice-name`) voice for each seed you specify — using the same syntax as `--indexes` (`5`, `1-5`, `3,9,20`) — from a sample sentence you provide:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan \
+zaphodvox --voice-id=Ryan \
   --voice-instruct="calm narrator, neutral American accent" --voice-temperature=0.6 \
   --audition=1-5 --audition-text="It is a mistake to think you can solve any major problems just with potatoes." \
   --out-dir=refs
@@ -185,7 +159,7 @@ This writes `ryan-audition-01.wav` … `ryan-audition-05.wav` (the basename defa
 Exactly one voice source is allowed, and `--voice-name` is one of them: a voice already in your `--voices-file` is auditioned as it stands, without restating its clip and transcript.
 
 ```bash
-zaphodvox --encoder=qwen --voice-name=Narrator --voices-file=voices.json \
+zaphodvox --voice-name=Narrator --voices-file=voices.json \
   --audition=1-5 --audition-text="..." --out-dir=refs
 ```
 
@@ -196,31 +170,31 @@ The voice's stored `seed` and `temperature` do **not** carry over: the seed is t
 `--list-voices` prints what the server offers:
 
 ```bash
-zaphodvox --encoder=chatterbox --list-voices
+zaphodvox --list-voices
 ```
 
-A comma-separated `--voice-id` then auditions several of them at once — one candidate per voice, per seed — which is how you find a voice on a server that cannot design one:
+A comma-separated `--voice-id` then auditions several of them at once — one candidate per voice, per seed — so you can hear the whole shelf read the same line before picking one:
 
 ```bash
-zaphodvox --encoder=chatterbox --voice-id=Alice.wav,Miles.wav,Cora.wav \
+zaphodvox --voice-id=Serena,Dylan,Eric \
   --basename=shop --audition=1 --audition-text="..." --out-dir=refs
 ```
 
 ```console
 Auditioning 3 preset voices
-┏━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ voice     ┃ seed ┃ file                       ┃
-┡━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ Alice.wav │    1 │ shop-audition-Alice-01.wav │
-│ Miles.wav │    1 │ shop-audition-Miles-01.wav │
-│ Cora.wav  │    1 │ shop-audition-Cora-01.wav  │
-└───────────┴──────┴────────────────────────────┘
+┏━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ voice  ┃ seed ┃ file                       ┃
+┡━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Serena │    1 │ shop-audition-Serena-01.wav │
+│ Dylan  │    1 │ shop-audition-Dylan-01.wav  │
+│ Eric   │    1 │ shop-audition-Eric-01.wav   │
+└────────┴──────┴────────────────────────────┘
 ```
 
 Since every voice has a candidate at each seed, the seed alone no longer names one — pass `--voice-id` to `--adopt` as well:
 
 ```bash
-zaphodvox --adopt=1 --voice-id=Miles.wav --voice-name=Narrator --clips-dir=clips refs/shop-audition.json
+zaphodvox --adopt=1 --voice-id=Dylan --voice-name=Narrator --clips-dir=clips refs/shop-audition.json
 ```
 
 Listen to the candidates and adopt the one you like with `--adopt`, giving it a name and a voices file to write to (the audition index is the inputfile):
@@ -236,7 +210,7 @@ This adds a **`Narrator-02`** clone voice to `voices.json`, carrying over the ca
 Auditioning a **clone** (`--voice-ref-audio`) re-clones a voice you already have. The candidates are synthetic takes of it, so adopting one **re-anchors the voice to clean studio audio**. This is the way to launder a real recording — room tone, mouth noise, an uneven level, a cough at the end — into a reference clip fit for a whole book:
 
 ```bash
-zaphodvox --encoder=qwen --voice-ref-audio=recording.wav \
+zaphodvox --voice-ref-audio=recording.wav \
   --voice-ref-text="What I actually said in the recording." \
   --basename=narrator --voice-temperature=0.6 \
   --audition=1-8 --audition-text="It is a mistake to think you can solve any major problems just with potatoes." \
@@ -250,7 +224,7 @@ Give it the transcript via `--voice-ref-text` so the higher-quality in-context m
 If the recording is already registered in the library (with `--add-voice`, say), name it instead — the clip and its transcript come along by themselves:
 
 ```bash
-zaphodvox --encoder=qwen --voice-name=Narrator --voices-file=voices.json \
+zaphodvox --voice-name=Narrator --voices-file=voices.json \
   --voice-temperature=0.6 --audition=1-8 --audition-text="..." --out-dir=refs
 
 zaphodvox --adopt=5 --voice-name=Narrator --voices-file=voices.json refs/Narrator-audition.json
@@ -267,7 +241,7 @@ The same mechanism gives you **sibling voices** — the same person with a diffe
 To combine the individual fragment audio files into one, add the `--concat` argument:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --encode --concat gone-bananas.txt
+zaphodvox --voice-id=Ryan --encode --concat gone-bananas.txt
 ```
 
 An additional audio file, `gone-bananas.wav`, will be saved in the current directory.
@@ -295,7 +269,7 @@ This is the last line. And this is a sentence that is split between lines. Ideal
 Encode this new file:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --encode --concat gone-bananas-cleaned.txt
+zaphodvox --voice-id=Ryan --encode --concat gone-bananas-cleaned.txt
 ```
 
 Notice that a pause is generated for each empty newline and that the last sentence is no longer split between lines.
@@ -303,7 +277,7 @@ Notice that a pause is generated for each empty newline and that the last senten
 The `--clean` and `--encode` arguments can be combined in a single call:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --clean --encode --concat gone-bananas.txt
+zaphodvox --voice-id=Ryan --clean --encode --concat gone-bananas.txt
 ```
 
 If the `--max-chars` argument is provided, the cleaning process will guarantee that every line is less than `max-chars` characters by splitting long lines at sentence boundaries.
@@ -398,7 +372,7 @@ If a line contains the "ZVOX" tag, it will not be synthesized to speech.
 ```
 
 ```bash
-zaphodvox --voices-file=voices.json --encoder=qwen --encode heart-of-gold.txt
+zaphodvox --voices-file=voices.json --encode heart-of-gold.txt
 ```
 
 The above command will result in the following fragment audio files to be created in the current directory:
@@ -463,9 +437,9 @@ A design example:
 }
 ```
 
-### Chatterbox Voice Configuration
+### The encoder tag
 
-A voice records the encoder it belongs to, so **one voices file can hold voices for both engines** — handy for A/B-ing the same reference clip:
+Every voice records the encoder it belongs to, which is how it is read back as the right kind of voice — and how one voices file could hold voices for more than one engine:
 
 ```json
 {
@@ -475,18 +449,12 @@ A voice records the encoder it belongs to, so **one voices file can hold voices 
             "ref_audio": "clips/narrator.wav",
             "ref_text": "Well, hello there.",
             "seed": 42
-        },
-        "NarratorCB": {
-            "encoder": "chatterbox",
-            "ref_audio": "clips/narrator.wav",
-            "exaggeration": 0.7,
-            "seed": 42
         }
     }
 }
 ```
 
-A Chatterbox voice is a **preset** (`voice_id`, e.g. `Ryan.wav`) or a **clone** (`ref_audio`) — exactly one. Its fields are `seed`, `temperature`, `exaggeration`, `cfg_weight`, and `speed_factor`; it has no `description`, `ref_text`, `instruct`, or `language`, and including one is an error rather than a setting that is quietly dropped. A voice written before there was a second backend has no `encoder` and is read as Qwen, which is what it was.
+`encoder` defaults to `qwen`, so a voices file written before the tag existed still reads back as what it was. Unknown fields are an error rather than a setting that is quietly dropped, which is what keeps one engine's voice from validating as another's the day a second backend arrives.
 
 ### A shared voice library
 
@@ -503,7 +471,7 @@ A clone's `ref_audio` is resolved **relative to the file that declares it**, not
 
 ```console
 $ cd ~/books/hitchhiker
-$ zaphodvox --voices-file=~/voices/library.json --encoder=qwen --encode --voice-name=Narrator book.txt
+$ zaphodvox --voices-file=~/voices/library.json --encode --voice-name=Narrator book.txt
 ```
 
 `narrator.wav` is found next to `library.json`, wherever you run from. Point `ZAPHODVOX_VOICES_FILE` at the library once and you can drop the `--voices-file` argument entirely.
@@ -512,7 +480,7 @@ Audition into a scratch directory, and `--adopt` will bring the winner into the 
 
 ```console
 $ cd ~/voices
-$ zaphodvox --encoder=qwen --voice-id=Ryan --basename=narrator \
+$ zaphodvox --voice-id=Ryan --basename=narrator \
     --audition=1-8 --audition-text="..." --out-dir refs
 $ zaphodvox --adopt=5 --voice-name=Narrator refs/narrator-audition.json
     Copied refs/narrator-audition-05.wav -> Narrator-05.wav
@@ -526,8 +494,8 @@ $ rm -rf refs
 If you already have a reference clip — a recording of a real person, say — `--add-voice` puts it in the voices file directly, with no audition:
 
 ```console
-$ zaphodvox --encoder=chatterbox --add-voice=Narrator \
-    --voice-ref-audio=clips/narrator.wav --voice-exaggeration=0.6 --voice-seed=42
+$ zaphodvox --add-voice=Narrator \
+    --voice-ref-audio=clips/narrator.wav --voice-ref-text="Well, hello there." --voice-seed=42
     Added voice "Narrator" in voices.json
 ```
 
@@ -571,7 +539,7 @@ And always know where it is.
 The file is encoded with this command:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --encode towel.txt
+zaphodvox --voice-id=Ryan --encode towel.txt
 ```
 
 Three files will be created in the current directory: the two fragment audio files (`towel-00000.wav` and `towel-00001.wav`) and the manifest file (`towel-manifest.json`).
@@ -615,7 +583,7 @@ Changes can be made to fragment `text`, `filename`, or `voice` items and the mod
 For example, if the second fragment's `text` field is modified to remove the initial "And", this command will re-encode only the second fragment audio file in place (i.e. `towel-00001.wav`):
 
 ```bash
-zaphodvox --encoder=qwen --encode --indexes=1 towel-manifest.json
+zaphodvox --encode --indexes=1 towel-manifest.json
 ```
 
 The `--concat` argument can also be added when using a manifest file as input. In this case, an attempt will be made to concatenate both the unmodified and newly encoded fragment audio files into one. If any of the files specified in the manifest is missing, the concatenation will fail.
@@ -623,7 +591,7 @@ The `--concat` argument can also be added when using a manifest file as input. I
 A manifest plan can be created from a text file using the `--plan` argument:
 
 ```bash
-zaphodvox --encoder=qwen --voice-id=Ryan --plan gone-bananas.txt
+zaphodvox --voice-id=Ryan --plan gone-bananas.txt
 ```
 
 The above command will write the manifest plan to `gone-bananas-plan.json` without doing any encoding. It can be reviewed and edited before being used as input to the command with the `--encode` argument.
