@@ -37,13 +37,11 @@ $ pip install -e .
 
 > "He didn't know why he had become President of the Galaxy, except that it seemed a fun thing to be."
 
-`zaphodvox` does no synthesis itself. It talks to a locally-hosted TTS server, so you must have one running before encoding. One engine is supported today — Qwen3-TTS, selected with `--encoder=qwen`, which is also the default — served by [`eddie-tts`](https://github.com/gumptionthomas/eddie-tts) at `http://127.0.0.1:4123`. It is local, needs no API key, and wants an NVIDIA GPU.
-
-A Chatterbox backend was built after 2.2.0 and removed again before any release carried it: the model routinely keeps generating after it has finished speaking the text, leaving a few hundred milliseconds of invented sound at the end of a clip, and that is architectural rather than a setting. `zaphodvox` keeps the multi-encoder seam it left behind — `--encoder-name`, the `encoder` tag on every serialized voice, one voices file able to hold more than one engine's voices — so a second backend can be added without disturbing anything. See `CLAUDE.md` for the details.
+`zaphodvox` does no synthesis itself. It talks to a locally-hosted TTS server, so you must have one running before encoding. The engine is Qwen3-TTS, served by [`eddie-tts`](https://github.com/gumptionthomas/eddie-tts) at `http://127.0.0.1:4123`. It is local, needs no API key, and wants an NVIDIA GPU.
 
 ### Qwen3-TTS Server
 
-`--encoder=qwen` talks to a Qwen3-TTS server that exposes an OpenAI-style speech API.
+`zaphodvox` talks to a Qwen3-TTS server that exposes an OpenAI-style speech API. It is the default, so `--encoder=qwen` never has to be spelled out.
 
 The server needs to expose three endpoints:
 
