@@ -226,8 +226,9 @@ def parse_args(args: list) -> Namespace:
         '--audition-text',
         default=None,
         help=(
-            'The sample sentence(s) to speak when auditioning '
-            '(default: the first line of the inputfile)'
+            'The sample sentence(s) to speak when auditioning (default: '
+            'the first line of the inputfile, else a built-in English '
+            'sample written for the purpose)'
         )
     )
     parser.add_argument(

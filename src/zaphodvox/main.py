@@ -225,8 +225,6 @@ def validate(args: Namespace) -> None:
                 'Specify exactly one of "--voice-id", "--voice-ref-audio", '
                 '"--voice-description", or "--voice-name".'
             )
-        if not (args.audition_text or inputfile):
-            raise ValueError('No audition text specified.')
     if args.adopt is not None:
         if any([args.clean, args.plan, encode, args.concat, audition]):
             raise ValueError('--adopt cannot be combined with other actions.')
@@ -465,6 +463,39 @@ AUDITION_MIN_CHARS = 120
 """A soft minimum audition-text length (~10s of speech) below which a warning
 is shown, since short clips make poor clone references."""
 
+DEFAULT_AUDITION_TEXT = (
+    "The northern lights washed over the quiet harbor town, and the old "
+    "ship's bell rang twice. She judged the measure of the voyage ahead, "
+    'took a few days to think it through, then chose to sail into the '
+    'thinning fog.'
+)
+"""The sample sentences spoken when neither `--audition-text` nor an input
+file supplies one.
+
+Written to the criteria a clone anchor actually needs rather than borrowed
+from a canonical elicitation passage. The famous ones each fail one of them:
+the Harvard sentences (IEEE, 1969) are balanced only across a whole list of
+ten and read with list intonation; the Rainbow Passage is a 1960 book still
+under copyright; the Speech Accent Archive's "Please call Stella" is
+CC BY-NC-SA, and the NC clause rules it out here; "the quick brown fox" is a
+*letter* pangram with no /th/, /sh/ or /zh/ in it at all, and at three
+seconds it is far under `AUDITION_MIN_CHARS`.
+
+The criteria, in the order they bind:
+
+* **Every English consonant, every diphthong, and both /oo/ vowels**, so
+  the clone is not left extrapolating a phone the reference never contained.
+* **Connected prose, not a list of sentences** -- an audition is judged on
+  cadence, breath and sentence-final fall, not timbre alone, and a list is
+  read with the wrong prosody for narration.
+* **About fifteen seconds**, comfortably over `AUDITION_MIN_CHARS`.
+* **Neutral in register, and declarative throughout** -- a question mark
+  would bake a rising terminal into the anchor.
+* **No digits, currency, acronyms or abbreviations**, which exercise the
+  server's text normalizer rather than the voice, and differ per backend.
+* **Plain ASCII with straight quotes**, matching what `clean_text()` emits.
+"""
+
 
 def audition(args: Namespace, text: str, console: Console) -> None:
     """Synthesizes several candidate reference clips of a preset, designed, or
@@ -483,12 +514,10 @@ def audition(args: Namespace, text: str, console: Console) -> None:
 
     Args:
         args: The parsed command-line arguments.
-        text: The input file text, used for the sample sentence when
-            `--audition-text` is not given.
+        text: The input file text, whose first non-blank line is the sample
+            sentence when `--audition-text` is not given. Falling through
+            both leaves `DEFAULT_AUDITION_TEXT`.
         console: The `Console` object.
-
-    Raises:
-        ValueError: If no audition text can be determined.
     """
     basename: str = args.basename
     encoder: Encoder = args.encoder
@@ -498,10 +527,9 @@ def audition(args: Namespace, text: str, console: Console) -> None:
 
     seeds = parse_seeds(args.audition)
     audition_text = args.audition_text or next(
-        (line.strip() for line in text.split('\n') if line.strip()), ''
+        (line.strip() for line in text.split('\n') if line.strip()),
+        DEFAULT_AUDITION_TEXT
     )
-    if not audition_text:
-        raise ValueError('No audition text specified.')
     if len(audition_text) < AUDITION_MIN_CHARS:
         console.print(
             '[yellow]Warning: the audition text is short; aim for ~10-15s of '
