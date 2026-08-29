@@ -7,7 +7,12 @@ import pytest
 from zaphodvox import __version__
 from zaphodvox.arg_parser import parse_args
 from zaphodvox.http import CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT
-from zaphodvox.main import main, parse_voice_ids
+from zaphodvox.main import (
+    AUDITION_MIN_CHARS,
+    DEFAULT_AUDITION_TEXT,
+    main,
+    parse_voice_ids,
+)
 from zaphodvox.paths import resolve_ref
 from zaphodvox.qwen.encoder import DEFAULT_URL
 
@@ -752,11 +757,44 @@ class TestAudition():
         assert se.value.code == 1
         assert 'cannot be combined' in capfd.readouterr()[0]
 
-    def test_audition_no_text(self, capfd, mock_qwen):
-        with pytest.raises(SystemExit) as se:
-            main(['--encoder=qwen', '--voice-id=Ryan', '--audition=2'])
-        assert se.value.code == 1
-        assert 'No audition text specified' in capfd.readouterr()[0]
+    def test_audition_falls_back_to_the_built_in_text(
+        self, mock_qwen, mock_builtins_open
+    ):
+        # With neither --audition-text nor an inputfile, the built-in English
+        # sample is spoken, so auditioning a preset is a complete command on
+        # its own.
+        main(['--encoder=qwen', '--voice-id=Ryan', '--audition=2'])
+
+        payload = mock_qwen.post.call_args.kwargs['json']
+        assert payload['input'] == DEFAULT_AUDITION_TEXT
+
+    def test_audition_prefers_the_inputfile_to_the_built_in_text(
+        self, mock_qwen, mock_builtins_open
+    ):
+        # The default is the last resort; an inputfile still supplies the
+        # sample sentence, as it always has.
+        main(['--encoder=qwen', '--voice-id=Ryan', '--audition=2', 'test.txt'])
+
+        payload = mock_qwen.post.call_args.kwargs['json']
+        assert payload['input'] == "Don't panic!"
+
+    def test_audition_prefers_the_option_to_the_built_in_text(
+        self, mock_qwen, mock_builtins_open
+    ):
+        main([
+            '--encoder=qwen', '--voice-id=Ryan', '--audition=2',
+            '--audition-text=A long enough sample sentence for auditioning.',
+        ])
+
+        payload = mock_qwen.post.call_args.kwargs['json']
+        assert payload['input'] == (
+            'A long enough sample sentence for auditioning.'
+        )
+
+    def test_the_built_in_audition_text_is_long_enough(self):
+        # The built-in sample must not trip the "short reference clip"
+        # warning it exists to satisfy.
+        assert len(DEFAULT_AUDITION_TEXT) >= AUDITION_MIN_CHARS
 
     def test_audition_seed_range(self, mock_qwen, mock_builtins_open):
         # A seed range renders exactly those seeds (skipping 0).
