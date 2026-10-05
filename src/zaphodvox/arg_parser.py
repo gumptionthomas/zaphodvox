@@ -195,7 +195,7 @@ def parse_args(args: list) -> Namespace:
         default=None,
         help=(
             'The encoding plan manifest output file '
-            '(default: [out-dir]/[basename]-plan.txt)'
+            '(default: [out-dir]/[basename]-plan.json)'
         )
     )
     parser.add_argument(
@@ -338,17 +338,17 @@ def parse_args(args: list) -> Namespace:
             'otherwise [out-dir]/[basename]-manifest.json)'
         )
     )
-    parser.add_argument(
-        '--voice-id',
-        default=None,
-        help='The built-in preset voice/speaker to use (e.g. "Ryan")'
-    )
     qwen_group = parser.add_argument_group(
         'qwen options',
         description=(
             'Qwen3-TTS options (a locally-hosted Qwen3-TTS server, e.g. '
             'https://github.com/gumptionthomas/eddie-tts)'
         )
+    )
+    qwen_group.add_argument(
+        '--voice-id',
+        default=None,
+        help='The built-in preset voice/speaker to use (e.g. "Ryan")'
     )
     qwen_group.add_argument(
         '--voice-language',
