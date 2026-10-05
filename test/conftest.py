@@ -127,7 +127,8 @@ MockAudio = namedtuple('MockAudio', ['segment_cls', 'segment'])
 
 @pytest.fixture
 def mock_audio() -> Iterator[tuple[MagicMock, MagicMock]]:
-    with patch('zaphodvox.audio.AudioSegment') as segment_cls:
+    with patch('zaphodvox.audio._audio_segment') as audio_segment:
+        segment_cls = audio_segment.return_value
         segment = segment_cls.return_value
         segment.__add__.return_value = segment
         segment.__iadd__.return_value = segment
