@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import wave
 from pathlib import Path
 from unittest.mock import patch
@@ -43,6 +46,23 @@ def read_wav(filepath: Path) -> tuple[AudioParams, float]:
             frame_rate=w.getframerate(),
         )
         return params, w.getnframes() / w.getframerate()
+
+
+class TestLazyPydub():
+    def test_importing_the_cli_does_not_import_pydub(self):
+        """`pydub` warns about a missing `ffmpeg` the moment it is imported, so
+        it must not be imported until something actually needs it -- not by
+        `--help`, and not by a wav-only run. Checked in a fresh interpreter,
+        since this one has long since imported it.
+        """
+        src = Path(__file__).resolve().parent.parent / 'src'
+        env = {**os.environ, 'PYTHONPATH': str(src)}
+        code = "import sys, zaphodvox.main; print('pydub' in sys.modules)"
+        result = subprocess.run(
+            [sys.executable, '-c', code],
+            env=env, capture_output=True, text=True, check=True,
+        )
+        assert result.stdout.strip() == 'False'
 
 
 class TestAudioParams():

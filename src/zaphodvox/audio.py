@@ -2,12 +2,13 @@ import subprocess
 import wave
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import NamedTuple, Optional
-
-from pydub import AudioSegment
+from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from zaphodvox.manifest import Manifest
 from zaphodvox.progress import ProgressBar
+
+if TYPE_CHECKING:
+    from pydub import AudioSegment
 
 
 class AudioParams(NamedTuple):
@@ -29,6 +30,21 @@ _CHUNK_FRAMES = 1 << 14
 never held in memory all at once."""
 
 
+def _audio_segment() -> type['AudioSegment']:
+    """Imports `pydub`'s `AudioSegment` on first use.
+
+    `pydub` looks for `ffmpeg` when it is imported, and warns if it cannot find
+    one -- so importing it at module level printed that warning on every run,
+    even `--help`, though only an `mp3` concat or a fragment that is not a plain
+    `wav` actually needs it.
+
+    Returns:
+        The `AudioSegment` class.
+    """
+    from pydub import AudioSegment
+    return AudioSegment
+
+
 def audio_params(filepath: Path) -> Optional[AudioParams]:
     """Reads the sample format of an audio file.
 
@@ -48,7 +64,7 @@ def audio_params(filepath: Path) -> Optional[AudioParams]:
     except (OSError, wave.Error):
         pass
     try:
-        segment = AudioSegment.from_file(str(filepath))
+        segment = _audio_segment().from_file(str(filepath))
     except Exception:
         return None
     return AudioParams(
@@ -90,7 +106,7 @@ def create_silence(
                 bytes(frames * params.sample_width * params.channels)
             )
         return
-    silence = AudioSegment.silent(
+    silence = _audio_segment().silent(
         duration=duration, frame_rate=params.frame_rate
     )
     silence = silence.set_channels(params.channels)
@@ -206,7 +222,7 @@ def _append_wav(
                 return
     except wave.Error:
         pass
-    segment = AudioSegment.from_file(str(filepath))
+    segment = _audio_segment().from_file(str(filepath))
     segment = segment.set_frame_rate(target.frame_rate)
     segment = segment.set_channels(target.channels)
     segment = segment.set_sample_width(target.sample_width)
@@ -241,7 +257,7 @@ def _concat_encoded(
             )
             subprocess.run(
                 [
-                    AudioSegment.converter, '-v', 'error', '-y',
+                    _audio_segment().converter, '-v', 'error', '-y',
                     '-f', 'concat', '-safe', '0', '-i', str(listfile),
                     '-f', format, str(output_filepath),
                 ],
