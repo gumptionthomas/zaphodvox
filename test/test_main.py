@@ -1,4 +1,5 @@
 import json
+import wave
 from pathlib import Path
 from unittest.mock import call, mock_open, patch
 
@@ -16,7 +17,7 @@ from zaphodvox.main import (
 from zaphodvox.paths import resolve_ref
 from zaphodvox.qwen.encoder import DEFAULT_URL
 
-from fake_encoder import FakeEncoder  # noqa: F401
+from fake_encoder import FakeEncoder
 
 DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT)
 """The `(connect, read)` timeout every request carries unless told otherwise."""
@@ -1345,6 +1346,37 @@ class TestTextEncoding():
         plan = raw.decode('utf-8')
         assert '✓' in plan
         assert b'\r\n' not in raw
+
+
+class TestBlankLinesWithoutSilence():
+    """`--encode --concat` on a manuscript with blank lines and no
+    `--silence-duration`, through real files."""
+
+    def test_concatenates(self, tmp_path, monkeypatch):
+        # Setup: the fake encoder writes a real wav, so concat has audio to
+        # copy through.
+        def t2s(self, text, voice, filepath):
+            with wave.open(str(filepath), 'wb') as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(24000)
+                w.writeframes(b'\0\0' * 24000)
+
+        monkeypatch.setattr(FakeEncoder, 't2s', t2s)
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / 'book.txt').write_text(
+            'One sentence.\n\nAnother sentence.\n', encoding='utf-8'
+        )
+
+        # Run
+        main([
+            '--encoder-name=fake', '--voice-id=Fake', '--encode', '--concat',
+            'book.txt',
+        ])
+
+        # Verify: both sentences, and nothing for the blank line between.
+        with wave.open(str(tmp_path / 'book.wav'), 'rb') as w:
+            assert w.getnframes() == 2 * 24000
 
 
 class TestAuditionVoiceSweep():

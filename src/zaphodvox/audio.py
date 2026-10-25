@@ -134,9 +134,13 @@ def concat_files(
     Raises:
         FileNotFoundError: If any fragment's audio file is missing.
     """
+    # A blank line with no silence duration was never meant to have a file:
+    # the encoder writes nothing for it, so it is not a hole in the book and
+    # not something to look for on disk.
     filepaths = [
         audio_dir / fragment.filename
-        for fragment in manifest.fragments if fragment.filename
+        for fragment in manifest.fragments
+        if fragment.filename and (fragment.text or fragment.silence_duration)
     ]
     speech = [
         audio_dir / fragment.filename
