@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from zaphodvox.chatterbox.voice import ChatterboxVoice  # noqa: F401
 from zaphodvox.qwen.voice import QwenVoice  # noqa: F401
 from zaphodvox.voice import Voice
 
