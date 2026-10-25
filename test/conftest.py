@@ -1,4 +1,5 @@
 import json
+import os
 from collections import namedtuple
 from typing import Iterator
 from unittest.mock import MagicMock, mock_open, patch
@@ -6,6 +7,20 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from zaphodvox.qwen.voice import QwenVoice
+
+
+@pytest.fixture(autouse=True)
+def clean_environment(monkeypatch) -> None:
+    """Unsets every `ZAPHODVOX_*` variable for the duration of each test.
+
+    The CLI reads its defaults (server URL, voices file, clips dir, timeout,
+    LLM settings) from the environment, so a developer who exports any of them
+    in their shell would otherwise see the suite fail on defaults it doesn't
+    expect. A test that wants one sets it explicitly with `monkeypatch.setenv`.
+    """
+    for name in os.environ:
+        if name.startswith('ZAPHODVOX_'):
+            monkeypatch.delenv(name)
 
 
 @pytest.fixture
