@@ -1,6 +1,8 @@
 import os
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 
+from zaphodvox.chatterbox.encoder import DEFAULT_URL as CHATTERBOX_DEFAULT_URL
+from zaphodvox.chatterbox.encoder import ChatterboxEncoder  # noqa: F401
 from zaphodvox.encoder import Encoder
 from zaphodvox.http import (
     DEFAULT_READ_TIMEOUT,
@@ -412,6 +414,60 @@ def parse_args(args: list) -> Namespace:
     qwen_group.add_argument(
         '--qwen-audio-format',
         choices=['wav', 'mp3'],
+        default='wav',
+        help='The audio output format (default: wav)'
+    )
+
+    cb_group = parser.add_argument_group(
+        'chatterbox options',
+        description=(
+            'Chatterbox options (a locally-hosted Chatterbox TTS server, '
+            'https://github.com/devnen/Chatterbox-TTS-Server). Chatterbox has '
+            'no voice design and no in-context cloning, and steers delivery '
+            'numerically rather than with --voice-instruct.'
+        )
+    )
+    cb_group.add_argument(
+        '--voice-exaggeration',
+        type=float,
+        default=None,
+        help=(
+            'How expressive the delivery is (0.25-2.0); unlike '
+            '--voice-temperature this really is an expressiveness dial '
+            '(default: the server default)'
+        )
+    )
+    cb_group.add_argument(
+        '--voice-cfg-weight',
+        type=float,
+        default=None,
+        help=(
+            'How closely the delivery follows the reference voice, at the cost '
+            'of expressiveness (default: the server default)'
+        )
+    )
+    cb_group.add_argument(
+        '--voice-speed',
+        type=float,
+        default=None,
+        help=(
+            'How fast the speech is, as a multiple of normal pace '
+            '(default: the server default)'
+        )
+    )
+    cb_group.add_argument(
+        '--chatterbox-url',
+        default=os.environ.get(
+            'ZAPHODVOX_CHATTERBOX_URL', CHATTERBOX_DEFAULT_URL
+        ),
+        help=(
+            'The base URL of the Chatterbox TTS server '
+            f'(default: $ZAPHODVOX_CHATTERBOX_URL or {CHATTERBOX_DEFAULT_URL})'
+        )
+    )
+    cb_group.add_argument(
+        '--chatterbox-audio-format',
+        choices=['wav', 'mp3', 'opus'],
         default='wav',
         help='The audio output format (default: wav)'
     )

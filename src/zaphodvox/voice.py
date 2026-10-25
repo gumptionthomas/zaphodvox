@@ -24,7 +24,8 @@ class Voice(BaseModel):
 
     voice_id: Optional[str] = None
     """The built-in preset speaker the server offers, spelled the way that
-    server spells it (`Ryan` on Qwen). See `--list-voices`."""
+    server spells it (`Ryan` on Qwen, `Ryan.wav` on Chatterbox). See
+    `--list-voices`."""
     ref_audio: Optional[str] = None
     """The path to a reference audio file to clone. A relative path is resolved
     against the directory of the file that declared it (see `anchor`)."""
