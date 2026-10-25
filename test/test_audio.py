@@ -210,6 +210,45 @@ class TestConcatWav():
         # And it fails before writing anything, rather than half a book.
         assert not out.exists()
 
+    def test_a_blank_with_no_silence_duration_is_not_missing(
+        self, tmp_path, mock_progress_bar
+    ):
+        # A blank line encoded without `--silence-duration` gets a filename but
+        # no file: the encoder has nothing to write for it. That is not a hole
+        # in the book, and concatenating must not fail over it.
+        write_wav(tmp_path / 'f-0.wav', SPEECH, 1000)
+        write_wav(tmp_path / 'f-2.wav', SPEECH, 1000)
+        manifest = Manifest(fragments=[
+            Fragment(filename='f-0.wav', text='words'),
+            Fragment(filename='f-1.wav', text=''),
+            Fragment(filename='f-2.wav', text='more words'),
+        ])
+        out = tmp_path / 'book.wav'
+
+        # Run
+        concat_files(tmp_path, manifest, 'wav', out)
+
+        # Verify
+        _, seconds = read_wav(out)
+        assert seconds == pytest.approx(2.0)
+
+    def test_a_missing_silence_with_a_duration_is_an_error(
+        self, tmp_path, mock_progress_bar
+    ):
+        # A silence that *was* meant to be written is part of the book, and its
+        # absence is the same interrupted-encode hole as a missing speech file.
+        write_wav(tmp_path / 'f-0.wav', SPEECH, 1000)
+        write_wav(tmp_path / 'f-2.wav', SPEECH, 1000)
+        manifest = Manifest(fragments=[
+            Fragment(filename='f-0.wav', text='words'),
+            Fragment(filename='f-1.wav', text='', silence_duration=500),
+            Fragment(filename='f-2.wav', text='more words'),
+        ])
+        out = tmp_path / 'book.wav'
+
+        with pytest.raises(FileNotFoundError, match='f-1.wav'):
+            concat_files(tmp_path, manifest, 'wav', out)
+
     def test_skips_an_unreadable_fragment(self, tmp_path, mock_progress_bar):
         # Setup
         write_wav(tmp_path / 'f-0.wav', SPEECH, 1000)
